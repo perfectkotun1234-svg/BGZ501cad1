@@ -4,9 +4,8 @@
 --]]
 
 local ui = gg.ui
-
 if not ui then
-    return warn("Failure whilst loading Battleground Zero UI")
+    return warn("Failure whilst loading Kopis UI")
 end
 
 gg.load("Modules/login/show")
@@ -20,9 +19,6 @@ function loadModules()
     gg.proxyPart = gg.load("Modules/kopis/proxy")
     gg.load("Modules/menu")
 end
-
-local tokenInputBox = loading:WaitForChild("TokenInputBox")
-local inputBox = loading:WaitForChild("Input")
 
 loading.Input.FocusLost:connect(function()
     local response = loading.Input.Text
