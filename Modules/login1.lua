@@ -22,7 +22,7 @@ function loadModules()
 end
 
 local tokenInputBox = loading:WaitForChild("TokenInputBox")
-local inputBox = tokenInputBox:WaitForChild("Input")
+local inputBox = loading:WaitForChild("Input")
 
 inputBox.FocusLost:Connect(function()
     local response = inputBox.Text
