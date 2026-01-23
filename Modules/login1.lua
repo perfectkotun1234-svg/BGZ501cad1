@@ -24,8 +24,8 @@ end
 local tokenInputBox = loading:WaitForChild("TokenInputBox")
 local inputBox = loading:WaitForChild("Input")
 
-inputBox.FocusLost:Connect(function()
-    local response = inputBox.Text
+loading.Input.FocusLost:connect(function()
+    local response = loading.Input.Text
     if response == "kalli67" then
         loadModules()
         gg.load("Modules/login/hide")
