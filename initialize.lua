@@ -11,11 +11,13 @@ local RunService = game:GetService("RunService")
 
 hookfunction(error, warn)
 
-if getgenv().gg then return end
+if getgenv().gg then 
+    return warn("Ancient Environment is already loaded")
+end
 
 getgenv().gg = environment
 
---bypassing adonis (old)
+-- Bypassing adonis (old)
 local function checkErrorConnections()
     local Connections = getconnections(game:GetService("ScriptContext").Error)
     if #Connections > 0 then
@@ -45,8 +47,10 @@ function environment.load(path)
     
     if type(path) == "string" then
         print("Loading "..path)
+        local url = "https://raw.githubusercontent.com/prosecutioned/ancient/main/".. path ..".lua"
+        
         local succ, response = pcall(function()
-            return game:HttpGetAsync("https://github.com/prosecutioned/ancient".. path ..".lua")
+            return game:HttpGetAsync(url)
         end)
         
         if succ and response then
@@ -78,4 +82,4 @@ function environment.load(path)
 end
 
 gg.ui = environment.load(4735247703)
-gg.modules.login = environment.load("Modules")
+gg.modules.login = environment.load("Modules/login1")
