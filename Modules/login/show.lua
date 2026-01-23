@@ -68,7 +68,7 @@ if lockIcon then
 end
 
 if tokenInputBox then
-    local input = tokenInputBox:FindFirstChild("Input")
+    local input = loading:FindFirstChild("Input")
     if input then
         input.Visible = true
         input.TextTransparency = 1
