@@ -15,7 +15,7 @@ if lockIcon then
 end
 
 local tokenInputBox = loading:FindFirstChild("TokenInputBox")
-local input = tokenInputBox and tokenInputBox:FindFirstChild("Input")
+local input = loading:FindFirstChild("Input")
 
 if input then
     task.spawn(function()
