@@ -1,10 +1,11 @@
 --[[
-    proxy.lua (FIXED - Anti-Cheat Bypass)
+    proxy.lua (FIXED - Triggers Game's Own Hit Detection)
     
-    The game has an anti-cheat (partCreator) that detects new parts in Workspace
-    and reports them to the server via "partt" RemoteEvent.
+    Instead of firing the remote directly (server rejects),
+    this version teleports the enemy part to touch the REAL blade
+    so the game's own blade:GetTouchingParts() detects it.
     
-    Fix: Parent parts to Camera or nil, use different detection method
+    Anti-cheat bypass: Parts named "Void" and parented to Camera
 --]]
 
 local proxyPart = {}
@@ -13,14 +14,15 @@ local Players = game:GetService("Players")
 local links = {}
 local camera = workspace.CurrentCamera
 
--- Create a hidden container that won't trigger anti-cheat
+-- Hidden container for proxy parts
 local hiddenContainer = nil
 pcall(function()
     hiddenContainer = Instance.new("Folder")
-    hiddenContainer.Name = "Camera" -- Innocent name
-    hiddenContainer.Parent = camera -- Parent to camera, not workspace
+    hiddenContainer.Name = "Camera"
+    hiddenContainer.Parent = camera
 end)
 
+-- Update proxy positions
 RunService.RenderStepped:Connect(function()
     for part1, part2 in pairs(links) do
         if not part1 or not part1.Parent or not part2 or not part2.Parent then
@@ -55,6 +57,54 @@ function proxyPart:BindTouch(func)
     table.insert(self.TouchedBindings, func)
 end
 
+-- NEW: Bind touch that triggers game's blade detection
+function proxyPart:BindTouchWithBlade(targetHumanoid)
+    if not self.Part then
+        return
+    end
+    
+    if self.BladeConnection then
+        self.BladeConnection:Disconnect()
+        self.BladeConnection = nil
+    end
+    
+    self.BladeConnection = self.Part.Touched:Connect(function(part)
+        -- Check if it's a kopis blade/tip
+        if not part or not part.Parent then return end
+        if not part.Parent:IsA("Tool") then return end
+        
+        local tip = gg.kopis.getTip(part.Parent)
+        if not tip or part ~= tip then return end
+        
+        -- Get the real blade
+        local blade = tip
+        
+        -- Get target character
+        if not targetHumanoid or not targetHumanoid.Parent then return end
+        local targetCharacter = targetHumanoid.Parent
+        local targetTorso = targetCharacter:FindFirstChild("Torso") or targetCharacter:FindFirstChild("HumanoidRootPart")
+        
+        if not targetTorso then return end
+        
+        -- Teleport target torso to blade position momentarily
+        -- This makes the game's blade:GetTouchingParts() detect them
+        local originalCFrame = targetTorso.CFrame
+        local originalAnchored = targetTorso.Anchored
+        
+        pcall(function()
+            -- Brief teleport to blade
+            targetTorso.CFrame = blade.CFrame
+            
+            -- Restore immediately (next frame the game will have detected the touch)
+            task.defer(function()
+                pcall(function()
+                    targetTorso.CFrame = originalCFrame
+                end)
+            end)
+        end)
+    end)
+end
+
 function proxyPart:Destroy()
     if links[self.Part] then
         links[self.Part] = nil
@@ -63,6 +113,11 @@ function proxyPart:Destroy()
     if self.TouchedConnection then
         self.TouchedConnection:Disconnect()
         self.TouchedConnection = nil
+    end
+    
+    if self.BladeConnection then
+        self.BladeConnection:Disconnect()
+        self.BladeConnection = nil
     end
     
     if self.selectionBox then
@@ -109,8 +164,7 @@ function proxyPart:Link(Part, Weld, Offset)
         return
     end
     
-    -- FIXED: Parent to camera instead of workspace to avoid anti-cheat detection
-    -- The partCreator script only monitors workspace.ChildAdded
+    -- Parent to camera to avoid anti-cheat
     if hiddenContainer then
         self.Part.Parent = hiddenContainer
     else
@@ -119,8 +173,8 @@ function proxyPart:Link(Part, Weld, Offset)
     
     self.Part.Transparency = 1
     self.Part.CanCollide = false
-    self.Part.CanQuery = false -- Extra stealth
-    self.Part.CanTouch = true -- But still detect touches
+    self.Part.CanQuery = false
+    self.Part.CanTouch = true
     
     if Weld then
         pcall(function()
@@ -139,12 +193,13 @@ end
 
 function proxyPart.new()
     local newPart = Instance.new("Part")
-    newPart.Name = "Void" -- Use "Void" - the anti-cheat ignores parts named "Void"!
+    newPart.Name = "Void" -- Anti-cheat ignores "Void"
     
     return setmetatable({
         Part = newPart,
         TouchedBindings = {},
         TouchedConnection = nil,
+        BladeConnection = nil,
         Offset = nil,
     }, {
         __index = function(self, index)
