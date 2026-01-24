@@ -1,5 +1,12 @@
 --[[
-    initialize.lua
+    initialize.lua (FIXED)
+    
+    Sets up the global environment and loads modules.
+    
+    Key references needed by other modules:
+    - gg.client = LocalPlayer
+    - gg.kopis = damage module (with getKopis, getTip, damage, etc.)
+    - gg.proxyPart = proxy module
 --]]
 
 local environment = {
@@ -7,6 +14,7 @@ local environment = {
 }
 
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 
 hookfunction(error, warn)
 
@@ -16,12 +24,21 @@ end
 
 getgenv().gg = environment
 
+-- Set client reference (used by all modules)
+gg.client = Players.LocalPlayer
+
 -- Bypassing adonis (old)
 local function checkErrorConnections()
-    local Connections = getconnections(game:GetService("ScriptContext").Error)
+    local success, Connections = pcall(function()
+        return getconnections(game:GetService("ScriptContext").Error)
+    end)
+    if not success then return false end
+    
     if #Connections > 0 then
         for ConnectionKey, Connection in pairs(Connections) do
-            Connection:Disable()
+            pcall(function()
+                Connection:Disable()
+            end)
         end
     else
         return false
@@ -80,5 +97,8 @@ function environment.load(path)
     end
 end
 
+-- Load UI
 gg.ui = environment.load(4735247703)
+
+-- Load login module
 gg.modules.login = environment.load("Modules/login1")
