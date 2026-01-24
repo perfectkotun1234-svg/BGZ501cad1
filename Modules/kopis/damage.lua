@@ -1,10 +1,20 @@
 --[[
     damage.lua (FIXED)
     
-    Fixes:
-    - Swapped PlaySound/DealDamage remotes to match game
-    - Added getTip() function
-    - Fixed blade path: ToolModel > Blade > Tip
+    Game Remote Event Mapping (from the 4 game scripts):
+    
+    KopisLocal.lua:
+        ePlaySound  = combatEvents.PlaySound   -- Client fires this for DAMAGE
+        eDealDamage = combatEvents.DealDamage  -- Client fires this for SOUND
+    
+    CombatDamageServer.lua:
+        eDealDamage = combatEvents.PlaySound   -- Server listens for DAMAGE here
+        ePlaySound  = combatEvents.DealDamage  -- Server listens for SOUND here
+    
+    So: PlaySound remote = DAMAGE, DealDamage remote = SOUND
+    
+    KopisLocal.lua line 98: ePlaySound:FireServer(hitHumanoid) -- deals damage
+    KopisLocal.lua line 92: eDealDamage:FireServer(2) -- plays shield block sound
 --]]
 
 local lastHit = os.clock()
@@ -39,10 +49,21 @@ function kopis.getDefaultSwingSpeeds()
     return swingSpeeds.default
 end
 
-function kopis.getKopis(searchPlayer)
+function kopis.getKopis(searchBackpack)
     local client = gg.client
-    if searchPlayer == true then
-        -- Search in player's backpack
+    if not client then return nil end
+    
+    -- First check character (equipped kopis)
+    local character = client.Character
+    if character then
+        local kopisTool = character:FindFirstChild("Kopis")
+        if kopisTool then
+            return kopisTool
+        end
+    end
+    
+    -- If searchBackpack, also check backpack
+    if searchBackpack then
         local backpack = client:FindFirstChild("Backpack")
         if backpack then
             local kopisTool = backpack:FindFirstChild("Kopis")
@@ -50,29 +71,13 @@ function kopis.getKopis(searchPlayer)
                 return kopisTool
             end
         end
-        -- Search in character
-        local character = client.Character
-        if character then
-            local kopisTool = character:FindFirstChild("Kopis")
-            if kopisTool then
-                return kopisTool
-            end
-        end
-        return nil
-    else
-        local character = client.Character
-        if not character then
-            return nil
-        end
-        local kopisTool = character:FindFirstChild("Kopis")
-        if kopisTool then
-            return kopisTool
-        end
-        return nil
     end
+    
+    return nil
 end
 
--- NEW: Get the tip of the kopis blade
+-- Get the tip of the kopis blade
+-- Path from KopisLocal.lua line 27: toolModel:WaitForChild("Blade"):WaitForChild("Tip")
 function kopis.getTip(kopisTool)
     if not kopisTool then
         kopisTool = kopis.getKopis() or kopis.getKopis(true)
@@ -81,7 +86,7 @@ function kopis.getTip(kopisTool)
         return nil
     end
     
-    -- Path: Kopis > ToolModel > Blade > Tip (based on KopisLocal.lua)
+    -- Path: Kopis > ToolModel > Blade > Tip (from KopisLocal.lua)
     local toolModel = kopisTool:FindFirstChild("ToolModel")
     if toolModel then
         local blade = toolModel:FindFirstChild("Blade")
@@ -98,6 +103,15 @@ function kopis.getTip(kopisTool)
     return tip
 end
 
+-- Get the blade (parent of tip)
+function kopis.getBlade(kopisTool)
+    local tip = kopis.getTip(kopisTool)
+    if tip then
+        return tip.Parent
+    end
+    return nil
+end
+
 function kopis.getSwingSpeed()
     local kopisTool = kopis.getKopis() or kopis.getKopis(true)
     if not kopisTool then
@@ -109,12 +123,15 @@ function kopis.getSwingSpeed()
     if not getgc then
         return swingSpeeds.default
     end
+    
+    -- Search for trackSpeeds table in game's memory
+    -- From KopisLocal.lua: trackSpeeds = {1.5, 1, 1.25, 1.25, 1}
     for _,v in pairs(getgc()) do
         if type(v) == "function" then
             local success, upvalues = pcall(debug.getupvalues, v)
             if success then
                 for x,y in pairs(upvalues) do
-                    if type(y) == "table" and rawget(y,1) == 1.5 and rawget(y,2) == 1 and rawget(y, 3) == 1.25 and rawget(y,4) == 1.25 and rawget(y, 5)== 1 then
+                    if type(y) == "table" and rawget(y,1) == 1.5 and rawget(y,2) == 1 and rawget(y, 3) == 1.25 and rawget(y,4) == 1.25 and rawget(y, 5) == 1 then
                         swingSpeeds.kopis, swingSpeeds.swingSpeeds = kopisTool, y
                         return y
                     end
@@ -129,6 +146,7 @@ function kopis.getSlashDelay()
     if not getgc then
         return nil
     end
+    -- Search for SLASH_COOLDOWN variable
     for _,v in pairs(getgc()) do
         if type(v) == "function" then
             local success, upvalues = pcall(debug.getupvalues, v)
@@ -151,15 +169,14 @@ function kopis.getCombatEvents()
     end)
     if success and events then
         --[[
-            FIXED: The game has these SWAPPED in CombatDamageServer.lua:
-            eDealDamage = combatEvents.PlaySound  (PlaySound actually deals damage)
-            ePlaySound  = combatEvents.DealDamage (DealDamage actually plays sound)
-            
-            So we swap them here to match:
+            Return the ACTUAL remote names as they appear in game.
+            PlaySound = used for dealing damage (server's eDealDamage listens here)
+            DealDamage = used for playing sounds (server's ePlaySound listens here)
         --]]
         return {
-            DealDamage = events:FindFirstChild("PlaySound"),  -- SWAPPED
-            PlaySound = events:FindFirstChild("DealDamage")   -- SWAPPED
+            PlaySound = events:FindFirstChild("PlaySound"),   -- Fire this to deal damage
+            DealDamage = events:FindFirstChild("DealDamage"), -- Fire this to play sound
+            StudCount = events:FindFirstChild("StudCount")
         }
     end
     return nil
@@ -185,17 +202,19 @@ function kopis.damage(humanoid, part)
         return
     end
     
+    -- Cooldown check (matches SLASH_COOLDOWN = 0.55 from KopisLocal.lua)
     if os.clock() - lastHit < swingSpeeds.cooldown then
         return
     end
     
     local events = kopis.getCombatEvents()
-    if not events or not events.DealDamage then 
+    if not events or not events.PlaySound then 
         return 
     end
     
+    -- Fire PlaySound to deal damage (like KopisLocal.lua line 98)
     pcall(function()
-        events.DealDamage:FireServer(humanoid) 
+        events.PlaySound:FireServer(humanoid) 
     end)
     
     lastHit = os.clock()
@@ -203,6 +222,7 @@ end
 
 local lastCrit = os.clock()
 
+-- Hook to intercept damage calls for team kill check and critical hits
 local mt = getrawmetatable(game)
 local old = mt.__namecall
 setreadonly(mt, false)
@@ -214,20 +234,20 @@ mt.__namecall = newcclosure(function(self, ...)
     if method == "FireServer" and typeof(self) == "Instance" then
         local events = kopis.getCombatEvents()
         
-        -- Check if this is a damage event (remember: DealDamage = PlaySound remote)
-        if events and self == events.DealDamage then
+        -- Check if this is the damage remote (PlaySound)
+        if events and self == events.PlaySound then
             local humanoid = args[1]
             
-            if humanoid and humanoid:IsA("Humanoid") then
+            if humanoid and typeof(humanoid) == "Instance" and humanoid:IsA("Humanoid") then
                 local player = Players:GetPlayerFromCharacter(humanoid.Parent)
                 
                 if player then
-                    -- Team kill check
+                    -- Team kill prevention (unless enabled)
                     if player.Team == gg.client.Team and not kopis.teamKill then
                         return
                     end
                     
-                    -- Critical hit check
+                    -- Critical hit system
                     if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
                         local critData = gg.getCriticalHitData()
                         local chanceNum = math.random(0, 100)
@@ -236,7 +256,7 @@ mt.__namecall = newcclosure(function(self, ...)
                             task.spawn(function()
                                 task.wait(critData.Delay)
                                 lastCrit = os.clock()
-                                events.DealDamage:FireServer(humanoid)
+                                events.PlaySound:FireServer(humanoid)
                             end)
                         end
                     end
