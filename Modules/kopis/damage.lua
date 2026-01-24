@@ -2,8 +2,6 @@ local lastHit = os.clock()
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
-print("[DAMAGE.LUA] Starting load...")
-
 local kopis = {
     authorizedHit = true,
     teamKill = false,
@@ -29,11 +27,8 @@ if not gg or not gg.client then
     return kopis
 end
 
-print("[DAMAGE.LUA] gg.client found:", gg.client.Name)
-
 function kopis.setDamageCooldown(cooldown)
     swingSpeeds.cooldown = cooldown
-    print("[DAMAGE.LUA] Set cooldown to:", cooldown)
 end
 
 function kopis.getDefaultSwingSpeeds()
@@ -43,24 +38,55 @@ end
 function kopis.getKopis(searchPlayer)
     local client = gg.client
     if searchPlayer == true then
-        local tip = client:FindFirstChild("Tip", true)
-        if not tip or not tip.Parent:IsA("Tool") then
+        local character = client.Character
+        if not character then
             return
         end
-        local tool = tip.Parent
-        return tool
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool and tool.Name == "Kopis" then
+            return tool
+        end
+        local backpack = client:FindFirstChild("Backpack")
+        if backpack then
+            local kopisTool = backpack:FindFirstChild("Kopis")
+            if kopisTool then
+                return kopisTool
+            end
+        end
     else
         local character = client.Character
         if not character then
             return
         end
-        local tip = character:FindFirstChild("Tip", true)
-        if not tip or not tip.Parent:IsA("Tool") then
-            return
+        local tool = character:FindFirstChildOfClass("Tool")
+        if tool and tool.Name == "Kopis" then
+            return tool
         end
-        local tool = tip.Parent
-        return tool
     end
+    return nil
+end
+
+function kopis.getTip(tool)
+    if not tool then
+        tool = kopis.getKopis()
+    end
+    if not tool then
+        return nil
+    end
+    
+    local toolModel = tool:FindFirstChild("ToolModel")
+    if toolModel then
+        local blade = toolModel:FindFirstChild("Blade")
+        if blade then
+            local tip = blade:FindFirstChild("Tip")
+            if tip then
+                return tip
+            end
+        end
+    end
+    
+    local tip = tool:FindFirstChild("Tip", true)
+    return tip
 end
 
 function kopis.getSwingSpeed()
@@ -124,73 +150,55 @@ function kopis.getCombatEvents()
 end
 
 function kopis.damage(humanoid, part)
-    print("[DAMAGE.LUA] damage() called")
-    
     if not humanoid or not humanoid:IsA("Humanoid") then
-        print("[DAMAGE.LUA] Invalid humanoid")
-        return
-    end
-    
-    if not part or not part.Parent or not part.Parent:IsA("Tool") then
-        print("[DAMAGE.LUA] Invalid part")
-        return
-    end
-
-    local tool = kopis.getKopis()
-    if not tool then
-        print("[DAMAGE.LUA] No kopis found")
-        return
-    end
-
-    local tip = tool:FindFirstChild("Tip", true)
-    if not tip or part ~= tip then
-        print("[DAMAGE.LUA] Part is not tip")
-        return
-    end
-    
-    if os.clock() - lastHit < swingSpeeds.cooldown then
-        print("[DAMAGE.LUA] Cooldown active")
         return
     end
     
     local player = Players:GetPlayerFromCharacter(humanoid.Parent)
-    if player and player.Team == gg.client.Team and not kopis.teamKill then
-        print("[DAMAGE.LUA] Blocked team kill")
+    if not player then
+        return
+    end
+    
+    if player == gg.client then
+        return
+    end
+    
+    if player.Team == gg.client.Team and not kopis.teamKill then
+        return
+    end
+    
+    if os.clock() - lastHit < swingSpeeds.cooldown then
         return
     end
     
     local events = kopis.getCombatEvents()
-    if not events or not events.PlaySound or not events.DealDamage then 
-        print("[DAMAGE.LUA] Events not found")
+    if not events or not events.PlaySound then 
         return 
     end
     
-    print("[DAMAGE.LUA] Firing PlaySound for:", humanoid.Parent.Name)
-    pcall(function()
-        events.PlaySound:FireServer(humanoid) 
+    local success = pcall(function()
+        events.PlaySound:FireServer(humanoid)
     end)
     
-    lastHit = os.clock()
-    
-    if gg.getCriticalHitData then
-        local critData = gg.getCriticalHitData()
-        if critData and critData.Activated and player then
-            local chanceNum = math.random(0, 100)
-            
-            if chanceNum <= critData.Chance then
-                print("[DAMAGE.LUA] Critical hit triggered!")
-                task.spawn(function()
-                    task.wait(critData.Delay)
-                    pcall(function()
-                        events.PlaySound:FireServer(humanoid)
+    if success then
+        lastHit = os.clock()
+        
+        if gg.getCriticalHitData then
+            local critData = gg.getCriticalHitData()
+            if critData and critData.Activated then
+                local chanceNum = math.random(0, 100)
+                
+                if chanceNum <= critData.Chance then
+                    task.spawn(function()
+                        task.wait(critData.Delay)
+                        pcall(function()
+                            events.PlaySound:FireServer(humanoid)
+                        end)
                     end)
-                end)
+                end
             end
         end
     end
 end
-
-print("[DAMAGE.LUA] Loaded successfully!")
-print("[DAMAGE.LUA] Team Kill enabled:", kopis.teamKill)
 
 return kopis
