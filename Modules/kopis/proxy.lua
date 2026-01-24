@@ -1,6 +1,8 @@
 --[[
     proxy.lua (Simple Version - Visual Only)
     
+    Creates invisible proxy parts that follow targets.
+    Used for visual hitbox display only - damage won't register on server.
     
     Anti-cheat bypass:
     - Name = "Void" (anti-cheat ignores this)
