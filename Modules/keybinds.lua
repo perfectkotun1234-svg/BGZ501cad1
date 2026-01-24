@@ -1,8 +1,3 @@
---[[
-    keybinds.lua
-    @author kalli666
---]]
-
 local UserInputService = game:GetService("UserInputService")
 
 local keybinds = {

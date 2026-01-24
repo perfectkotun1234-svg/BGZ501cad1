@@ -1,6 +1,5 @@
 --[[
     initialize.lua
-    @author kalli666
 --]]
 
 local environment = {

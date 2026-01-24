@@ -1,4 +1,8 @@
-local lastEventFiredAt = tick() - 100
+--[[
+    damage.lua
+--]]
+
+local lastHit = os.clock()
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
@@ -22,11 +26,6 @@ local swingSpeeds = {
     cooldown = .55
 }
 
-if not gg or not gg.client then
-    warn("[DAMAGE.LUA] ERROR: gg or gg.client is not defined!")
-    return kopis
-end
-
 function kopis.setDamageCooldown(cooldown)
     swingSpeeds.cooldown = cooldown
 end
@@ -38,55 +37,24 @@ end
 function kopis.getKopis(searchPlayer)
     local client = gg.client
     if searchPlayer == true then
-        local character = client.Character
-        if not character then
+        local tip = client:FindFirstChild("Tip", true)
+        if not tip or not tip.Parent:IsA("Tool") then
             return
         end
-        local tool = character:FindFirstChildOfClass("Tool")
-        if tool and tool.Name == "Kopis" then
-            return tool
-        end
-        local backpack = client:FindFirstChild("Backpack")
-        if backpack then
-            local kopisTool = backpack:FindFirstChild("Kopis")
-            if kopisTool then
-                return kopisTool
-            end
-        end
+        local tool = tip.Parent
+        return tool
     else
         local character = client.Character
         if not character then
             return
         end
-        local tool = character:FindFirstChildOfClass("Tool")
-        if tool and tool.Name == "Kopis" then
-            return tool
+        local tip = character:FindFirstChild("Tip", true)
+        if not tip or not tip.Parent:IsA("Tool") then
+            return
         end
+        local tool = tip.Parent
+        return tool
     end
-    return nil
-end
-
-function kopis.getTip(tool)
-    if not tool then
-        tool = kopis.getKopis()
-    end
-    if not tool then
-        return nil
-    end
-    
-    local toolModel = tool:FindFirstChild("ToolModel")
-    if toolModel then
-        local blade = toolModel:FindFirstChild("Blade")
-        if blade then
-            local tip = blade:FindFirstChild("Tip")
-            if tip then
-                return tip
-            end
-        end
-    end
-    
-    local tip = tool:FindFirstChild("Tip", true)
-    return tip
 end
 
 function kopis.getSwingSpeed()
@@ -140,7 +108,7 @@ function kopis.getCombatEvents()
     local success, events = pcall(function()
         return game:GetService("ReplicatedStorage").CombatEvents
     end)
-    if success and events then
+    if success then
         return {
             PlaySound = events:FindFirstChild("PlaySound"),
             DealDamage = events:FindFirstChild("DealDamage")
@@ -154,73 +122,72 @@ function kopis.damage(humanoid, part)
         return
     end
     
-    local character = humanoid.Parent
-    if not character then
+    if not part or not part.Parent or not part.Parent:IsA("Tool") then
         return
     end
-    
-    local player = Players:GetPlayerFromCharacter(character)
-    if not player then
+
+    local tool = kopis.getKopis()
+    if not tool then
         return
     end
-    
-    if tick() - lastEventFiredAt < 0.7 then
+
+    local tip = tool:FindFirstChild("Tip", true)
+    if not tip or part ~= tip then
         return
     end
-    
-    if humanoid == gg.client.Character:FindFirstChild("Humanoid") then
+    if os.clock() - lastHit < swingSpeeds.cooldown then
         return
     end
-    if not player then
-        return
-    end
-    
-    if player.Team == gg.client.Team and not kopis.teamKill then
-        return
-    end
-    
     local events = kopis.getCombatEvents()
-    if not events or not events.PlaySound or not events.DealDamage then 
-        return 
-    end
+    if not events or not events.PlaySound or not events.DealDamage then return end
+    pcall(function()
+        events.PlaySound:FireServer(humanoid) 
+    end)
     
-    lastEventFiredAt = tick()
-    
-    events.DealDamage:FireServer(3)
-    events.PlaySound:FireServer(humanoid)
-    
-    if gg.getCriticalHitData then
-        local critData = gg.getCriticalHitData()
-        if critData and critData.Activated then
-            local chanceNum = math.random(0, 100)
-            
-            if chanceNum <= critData.Chance then
-                task.spawn(function()
-                    task.wait(critData.Delay)
-                    pcall(function()
-                        events.PlaySound:FireServer(humanoid)
-                    end)
-                end)
-            end
-        end
-    end
+    lastHit = os.clock()
 end
+
+local lastCrit = os.clock()
 
 local mt = getrawmetatable(game)
 local old = mt.__namecall
 setreadonly(mt, false)
 
-getrawmetatable(game).__namecall = function(self, ...)
-    local arguments = {...}
-    if typeof(self) == "Instance" and self.Name and (self.Name == "PlaySound" or self.Name == "DealDamage") then
-        if tick() - lastEventFiredAt < 0.7 then
-            return old(self, ...)
+mt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    if method == "FireServer" and typeof(self) == "Instance" then
+        local events = kopis.getCombatEvents()
+        if events and self == events.PlaySound then
+            local humanoid = args[1]
+            
+            if humanoid and humanoid:IsA("Humanoid") then
+                local player = Players:GetPlayerFromCharacter(humanoid.Parent)
+                
+                if player then
+                    if player.Team == gg.client.Team and not kopis.teamKill then
+                        return
+                    end
+                    if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
+                        local critData = gg.getCriticalHitData()
+                        local chanceNum = math.random(0, 100)
+                        
+                        if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
+                            task.spawn(function()
+                                task.wait(critData.Delay)
+                                lastCrit = os.clock()
+                                events.PlaySound:FireServer(humanoid)
+                            end)
+                        end
+                    end
+                end
+            end
         end
-        
-        lastEventFiredAt = tick()
     end
     
     return old(self, ...)
-end
+end)
+
+setreadonly(mt, true)
 
 return kopis

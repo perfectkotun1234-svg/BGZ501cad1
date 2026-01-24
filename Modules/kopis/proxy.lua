@@ -1,6 +1,5 @@
 --[[
     proxy.lua
-    @author kalli666
 --]]
 
 local proxyPart = {}

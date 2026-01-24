@@ -56,9 +56,9 @@ function hitboxExtender:On()
         proxy:SetSize(Vector3.new(self.Size, self.Size, self.Size))
         proxy:CreateOutline()
         proxy:BindTouch(function(part)
-            if part.Name == "Tip" and part.Parent and part.Parent.Name == "Blade" then
-                local toolModel = part.Parent.Parent
-                if toolModel and toolModel.Name == "ToolModel" then
+            if part.Parent and part.Parent:IsA("Tool") then
+                local tip = part.Parent:FindFirstChild("Tip", true)
+                if tip and part == tip then
                     gg.kopis.damage(humanoid, part)
                 end
             end

@@ -1,6 +1,5 @@
 --[[
     show.lua
-    @author kalli666
 ]]
 
 local ui = gg.ui
@@ -68,7 +67,7 @@ if lockIcon then
 end
 
 if tokenInputBox then
-    local input = loading:FindFirstChild("Input")
+    local input = tokenInputBox:FindFirstChild("Input")
     if input then
         input.Visible = true
         input.TextTransparency = 1

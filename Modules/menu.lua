@@ -1,8 +1,3 @@
---[[
-    menu.lua
-    @author kalli666 
---]]
-
 local menu = {
     ui = gg.ui:WaitForChild("Menu"),
     Modules = {},

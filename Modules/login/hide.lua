@@ -1,6 +1,5 @@
 --[[
     hide.lua
-    @author kalli666
 ]]
 
 local Ui = gg.ui
@@ -15,7 +14,7 @@ if lockIcon then
 end
 
 local tokenInputBox = loading:FindFirstChild("TokenInputBox")
-local input = loading:FindFirstChild("Input")
+local input = tokenInputBox and tokenInputBox:FindFirstChild("Input")
 
 if input then
     task.spawn(function()

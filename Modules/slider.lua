@@ -1,8 +1,3 @@
---[[
-    slider.lua
-    @author kalli666
---]]
-
 local slider = {}
 
 function slider:Bind(func)

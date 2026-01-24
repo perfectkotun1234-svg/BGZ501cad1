@@ -1,11 +1,7 @@
---[[
-    login.lua
-    @author kalli666 
---]]
-
 local ui = gg.ui
+
 if not ui then
-    return warn("Failure whilst loading Kopis UI")
+    return warn("Failure whilst loading Battleground Zero UI")
 end
 
 gg.load("Modules/login/show")
@@ -20,8 +16,11 @@ function loadModules()
     gg.load("Modules/menu")
 end
 
-loading.Input.FocusLost:connect(function()
-    local response = loading.Input.Text
+local tokenInputBox = loading:WaitForChild("TokenInputBox")
+local inputBox = loading:WaitForChild("Input")
+
+inputBox.FocusLost:Connect(function()
+    local response = inputBox.Text
     if response == "kalli67" then
         loadModules()
         gg.load("Modules/login/hide")
