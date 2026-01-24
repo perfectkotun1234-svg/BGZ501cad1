@@ -1,6 +1,7 @@
 local lastHit = os.clock()
 local playerCooldowns = {}
 local lastEventFiredAt = tick() - 100
+local swingCount = 0
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
@@ -156,7 +157,7 @@ function kopis.damage(humanoid, part)
         return
     end
     
-    if tick() - lastEventFiredAt > 0.7 then
+    if tick() - lastEventFiredAt > 0.5 then
         return
     end
     
@@ -174,7 +175,7 @@ function kopis.damage(humanoid, part)
     end
     
     local playerCooldown = playerCooldowns[player.UserId] or 0
-    if tick() - playerCooldown < 0.7 then
+    if tick() - playerCooldown < swingSpeeds.cooldown then
         return
     end
     
@@ -183,27 +184,25 @@ function kopis.damage(humanoid, part)
         return 
     end
     
+    playerCooldowns[player.UserId] = tick()
+    
     local success = pcall(function()
         events.DealDamage:FireServer(3)
         events.PlaySound:FireServer(humanoid)
     end)
     
-    if success then
-        playerCooldowns[player.UserId] = tick()
-        
-        if gg.getCriticalHitData then
-            local critData = gg.getCriticalHitData()
-            if critData and critData.Activated then
-                local chanceNum = math.random(0, 100)
-                
-                if chanceNum <= critData.Chance then
-                    task.spawn(function()
-                        task.wait(critData.Delay)
-                        pcall(function()
-                            events.PlaySound:FireServer(humanoid)
-                        end)
+    if success and gg.getCriticalHitData then
+        local critData = gg.getCriticalHitData()
+        if critData and critData.Activated then
+            local chanceNum = math.random(0, 100)
+            
+            if chanceNum <= critData.Chance then
+                task.spawn(function()
+                    task.wait(critData.Delay)
+                    pcall(function()
+                        events.PlaySound:FireServer(humanoid)
                     end)
-                end
+                end)
             end
         end
     end
@@ -214,14 +213,16 @@ local old = mt.__namecall
 setreadonly(mt, false)
 
 mt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
     local arguments = {...}
     
-    if typeof(self) == "Instance" and self.Name and (self.Name == "PlaySound" or self.Name == "DealDamage") then
-        if tick() - lastEventFiredAt < 0.7 then
-            return old(self, ...)
+    if method == "FireServer" and typeof(self) == "Instance" and self.Name then
+        if self.Name == "PlaySound" and arguments[1] and arguments[1]:IsA("Humanoid") then
+            if tick() - lastEventFiredAt >= 0.55 then
+                lastEventFiredAt = tick()
+                swingCount = 0
+            end
         end
-        
-        lastEventFiredAt = tick()
     end
     
     return old(self, ...)
