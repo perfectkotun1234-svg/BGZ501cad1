@@ -1,7 +1,7 @@
 local lastHit = os.clock()
 local playerCooldowns = {}
 local lastEventFiredAt = tick() - 100
-local swingCount = 0
+local hitPlayers = {}
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
@@ -174,6 +174,10 @@ function kopis.damage(humanoid, part)
         return
     end
     
+    if hitPlayers[player.UserId] then
+        return
+    end
+    
     local playerCooldown = playerCooldowns[player.UserId] or 0
     if tick() - playerCooldown < swingSpeeds.cooldown then
         return
@@ -184,10 +188,14 @@ function kopis.damage(humanoid, part)
         return 
     end
     
+    hitPlayers[player.UserId] = true
     playerCooldowns[player.UserId] = tick()
     
+    task.delay(0.05, function()
+        hitPlayers[player.UserId] = nil
+    end)
+    
     local success = pcall(function()
-        events.DealDamage:FireServer(3)
         events.PlaySound:FireServer(humanoid)
     end)
     
@@ -218,9 +226,16 @@ mt.__namecall = newcclosure(function(self, ...)
     
     if method == "FireServer" and typeof(self) == "Instance" and self.Name then
         if self.Name == "PlaySound" and arguments[1] and arguments[1]:IsA("Humanoid") then
+            local targetPlayer = Players:GetPlayerFromCharacter(arguments[1].Parent)
+            if targetPlayer then
+                hitPlayers[targetPlayer.UserId] = true
+                task.delay(0.05, function()
+                    hitPlayers[targetPlayer.UserId] = nil
+                end)
+            end
+            
             if tick() - lastEventFiredAt >= 0.55 then
                 lastEventFiredAt = tick()
-                swingCount = 0
             end
         end
     end
