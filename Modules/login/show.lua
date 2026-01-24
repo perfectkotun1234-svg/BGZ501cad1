@@ -66,17 +66,15 @@ if lockIcon then
     lockIcon:TweenSize(UDim2.new(0.077, 0, 0.062, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Back, 0.2, true)
 end
 
-if tokenInputBox then
-    local input = tokenInputBox:FindFirstChild("Input")
-    if input then
-        input.Visible = true
-        input.TextTransparency = 1
-        
-        task.spawn(function()
-            for i = 1, 0, -0.1 do
-                task.wait()
-                input.TextTransparency = i
-            end
-        end)
-    end
+local input = loading:FindFirstChild("Input")
+if input then
+    input.Visible = true
+    input.TextTransparency = 1
+
+    task.spawn(function()
+        for i = 1, 0, -0.1 do
+            task.wait()
+            input.TextTransparency = i
+        end
+    end)
 end
