@@ -1,11 +1,18 @@
+--[[
+    accuracy.lua (FIXED)
+    
+    Auto-aim that rotates player to face nearest enemy when swinging.
+    Uses BodyGyro for smooth rotation.
+--]]
+
 local accuracy = {
     Activated = false,
     Keybind = Enum.KeyCode.L,
 }
 
 local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
 local InputConnection
-local cooldown = os.clock()
 local Gyro
 local Current = 0
 
@@ -37,14 +44,18 @@ function accuracy:On()
                 Gyro.P = 30000
             end
             
+            -- Find nearest enemy
             local target, dis = nil, math.huge
-            for _,player in pairs(game:GetService("Players"):GetPlayers()) do
-                if player ~= client and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Torso")
-                    if humanoidRootPart then
-                        local distance = (humanoidRootPart.Position - clientRoot.Position).Magnitude
-                        if distance < dis then
-                            target, dis = player, distance
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= client and player.Character then
+                    local humanoid = player.Character:FindFirstChild("Humanoid")
+                    if humanoid and humanoid.Health > 0 then
+                        local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Torso")
+                        if humanoidRootPart then
+                            local distance = (humanoidRootPart.Position - clientRoot.Position).Magnitude
+                            if distance < dis then
+                                target, dis = player, distance
+                            end
                         end
                     end
                 end
@@ -59,11 +70,13 @@ function accuracy:On()
                 return
             end
             
+            -- Rotate to face target
             local targetCFrame = targetRoot.CFrame
             local inverse = targetCFrame:Inverse()
             Gyro.MaxTorque = Vector3.new(0, 20000, 0)
             Gyro.CFrame = CFrame.Angles(0, math.rad(180), 0) * inverse
             
+            -- Disable gyro after short delay
             task.spawn(function()
                 local savedCurrent = Current
                 task.wait(0.3)
