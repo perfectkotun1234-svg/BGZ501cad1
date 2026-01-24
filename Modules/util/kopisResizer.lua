@@ -1,10 +1,11 @@
 --[[
-    kopisResizer.lua (FIXED)
-      
-    The game detects blade resizing and reports to server!
-    This version uses a PROXY PART instead of modifying actual blade.
+    kopisResizer.lua (FIXED - Uses Game's Own Detection)
     
-    Server distance limit from CombatDamageServer.lua: 12 studs
+    Creates extended blade proxy.
+    When proxy touches enemy, teleports enemy to real blade
+    so game's own detection registers the hit.
+    
+    Does NOT resize actual blade (avoids anti-cheat).
 --]]
 
 local kopisResizer = {
@@ -18,12 +19,12 @@ local kopisResizer = {
     Connection = nil,
     Connection2 = nil,
     Connection3 = nil,
-    
-    MaxServerDistance = 12,
+    CurrentTarget = nil,
 }
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 gg.getKopisResizerData = function()
     return kopisResizer
@@ -36,27 +37,22 @@ function kopisResizer:On()
         local tip = gg.kopis.getTip(kopisTool)
         if not tip then return end
         
-        -- Destroy old proxy
         if kopisResizer.Proxy then
             kopisResizer.Proxy:Destroy()
             kopisResizer.Proxy = nil
         end
         
         local proxy = gg.proxyPart.new()
-        
-        -- Link to tip with weld
         proxy:Link(tip, true)
-        
-        -- Clamp to server distance
-        local clampedLength = math.min(kopisResizer.Length, kopisResizer.MaxServerDistance)
-        proxy:SetSize(Vector3.new(clampedLength, 0.538, kopisResizer.Thickness))
+        proxy:SetSize(Vector3.new(kopisResizer.Length, 0.538, kopisResizer.Thickness))
         proxy:CreateOutline()
         
-        proxy:BindTouch(function(part)
-            local character = part.Parent
-            if not character then return end
+        -- When proxy touches enemy, teleport them to real blade
+        proxy:BindTouch(function(obj)
+            if not obj or not obj.Parent then return end
             
-            -- Find humanoid (same logic as KopisLocal.lua)
+            -- Find humanoid
+            local character = obj.Parent
             local humanoid = character:FindFirstChild("Humanoid")
             if not humanoid and character.Parent then
                 humanoid = character.Parent:FindFirstChild("Humanoid")
@@ -71,22 +67,22 @@ function kopisResizer:On()
             if not targetPlayer then return end
             if targetPlayer == gg.client then return end
             
-            -- Server distance check
-            local clientCharacter = gg.client.Character
-            if not clientCharacter then return end
+            -- Get target torso
+            local targetTorso = character:FindFirstChild("Torso") or character:FindFirstChild("HumanoidRootPart")
+            if not targetTorso then return end
             
-            local clientRoot = clientCharacter:FindFirstChild("HumanoidRootPart") or clientCharacter:FindFirstChild("Torso")
-            local targetRoot = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+            -- Teleport target to blade momentarily
+            local originalCFrame = targetTorso.CFrame
             
-            if not clientRoot or not targetRoot then return end
-            
-            local distance = (clientRoot.Position - targetRoot.Position).Magnitude
-            if distance >= kopisResizer.MaxServerDistance then
-                return
-            end
-            
-            -- Deal damage using original tip
-            gg.kopis.damage(humanoid, tip)
+            pcall(function()
+                targetTorso.CFrame = tip.CFrame
+                
+                task.defer(function()
+                    pcall(function()
+                        targetTorso.CFrame = originalCFrame
+                    end)
+                end)
+            end)
         end)
 
         kopisResizer.Proxy = proxy
@@ -104,7 +100,6 @@ function kopisResizer:On()
             kopisResizer.Connection3 = nil
         end
         
-        -- Handle kopis equip
         kopisResizer.Connection2 = character.ChildAdded:Connect(function(obj)
             if obj:IsA("Tool") and obj.Name == "Kopis" then
                 if kopisResizer.Proxy then
@@ -116,7 +111,6 @@ function kopisResizer:On()
             end
         end)
         
-        -- Handle kopis unequip
         kopisResizer.Connection3 = character.ChildRemoved:Connect(function(obj)
             if obj:IsA("Tool") and obj.Name == "Kopis" then
                 if kopisResizer.Proxy then
@@ -157,14 +151,12 @@ function kopisResizer:Off()
     end
 end
 
--- Max length 11 (server limit 12)
-local lengthSlider = gg.slider.new(gg.ui:WaitForChild("Menu").Settings.kopisResizer.LengthSlider, 0, 11, 2)
+local lengthSlider = gg.slider.new(gg.ui:WaitForChild("Menu").Settings.kopisResizer.LengthSlider, 0, 15, 2)
 
 lengthSlider:Bind(function(val)
     kopisResizer.Length = val
     if kopisResizer.Activated and kopisResizer.Proxy then
-        local clampedLength = math.min(kopisResizer.Length, kopisResizer.MaxServerDistance)
-        kopisResizer.Proxy:SetSize(Vector3.new(clampedLength, 0.538, kopisResizer.Thickness))
+        kopisResizer.Proxy:SetSize(Vector3.new(kopisResizer.Length, 0.538, kopisResizer.Thickness))
     end
 end)
 
@@ -173,8 +165,7 @@ local thicknessSlider = gg.slider.new(gg.ui:WaitForChild("Menu").Settings.kopisR
 thicknessSlider:Bind(function(val)
     kopisResizer.Thickness = val
     if kopisResizer.Activated and kopisResizer.Proxy then
-        local clampedLength = math.min(kopisResizer.Length, kopisResizer.MaxServerDistance)
-        kopisResizer.Proxy:SetSize(Vector3.new(clampedLength, 0.538, kopisResizer.Thickness))
+        kopisResizer.Proxy:SetSize(Vector3.new(kopisResizer.Length, 0.538, kopisResizer.Thickness))
     end
 end)
 
