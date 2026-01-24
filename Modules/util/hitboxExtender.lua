@@ -1,22 +1,20 @@
 --[[
-    hitboxExtender.lua (FIXED)
+    hitboxExtender.lua 
     
-    Server validation from CombatDamageServer.lua line 55:
-    if (humanoid.Parent:GetPivot().Position - character:GetPivot().Position).Magnitude >= 12 then
-        return
-    end
+    From KopisLocal.lua analysis:
+    - Game uses blade:GetTouchingParts() to detect hits
+    - Game checks if enemy body parts are within 3 studs of HumanoidRootPart
     
-    Server rejects hits > 12 studs, so hitbox extender is limited by this.
+    Solution: When swinging, briefly teleport nearby enemies TO your blade
+    so the game's own detection registers them. Don't modify enemy parts.
 --]]
 
 local hitboxExtender = {
     Activated = false,
     Keybind = Enum.KeyCode.X,
-    Parts = {},
-    DiedBinds = {},
-    Size = 10,
-    CharacterAdded = {},
-    MaxServerDistance = 12,  -- From CombatDamageServer.lua line 55
+    Range = 15,  -- How far to pull enemies from
+    Connection = nil,
+    SwingConnection = nil,
 }
 
 local UserInputService = game:GetService("UserInputService")
@@ -27,107 +25,84 @@ gg.getHitboxExtenderData = function()
     return hitboxExtender
 end
 
+local lastPull = 0
+local PULL_COOLDOWN = 0.5  -- Match game's SLASH_COOLDOWN
+
 function hitboxExtender:Off()
-    if hitboxExtender.PlayerAdded then
-        hitboxExtender.PlayerAdded:Disconnect()
-        hitboxExtender.PlayerAdded = nil
+    if self.Connection then
+        self.Connection:Disconnect()
+        self.Connection = nil
     end
-    for _, added in pairs(hitboxExtender.CharacterAdded) do
-        if added and added.Connected then
-            added:Disconnect()
-        end
+    if self.SwingConnection then
+        self.SwingConnection:Disconnect()
+        self.SwingConnection = nil
     end
-    for _,func in pairs(hitboxExtender.DiedBinds) do
-        if func and func.Connected then
-            func:Disconnect()
-        end
-    end
-    for _, proxy in pairs(hitboxExtender.Parts) do
-        if proxy then
-            proxy:Destroy()
-        end
-    end
-    hitboxExtender.Parts = {}
-    hitboxExtender.DiedBinds = {}
-    hitboxExtender.CharacterAdded = {}
 end
 
 function hitboxExtender:On()
-    local function createHitbox(player)
-        if player == gg.client then
+    local function pullEnemiesToBlade()
+        -- Check cooldown
+        if tick() - lastPull < PULL_COOLDOWN then
             return
         end
         
-        local character = player.Character
+        local character = gg.client.Character
         if not character then return end
         
-        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
-        local humanoid = character:FindFirstChild("Humanoid")
+        local kopis = character:FindFirstChild("Kopis")
+        if not kopis then return end
         
-        if not humanoidRootPart or not humanoid then return end
+        local tip = gg.kopis.getTip(kopis)
+        if not tip then return end
         
-        local proxy = gg.proxyPart.new()
-        proxy:Link(humanoidRootPart)
-        proxy:SetSize(Vector3.new(self.Size, self.Size, self.Size))
-        proxy:CreateOutline()
+        local myHRP = character:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
         
-        proxy:BindTouch(function(part)
-            -- Check if it's a kopis tip
-            if not part.Parent then return end
-            if not part.Parent:IsA("Tool") then return end
-            
-            local tip = gg.kopis.getTip(part.Parent)
-            if not tip or part ~= tip then return end
-            
-            -- Get client position for distance check
-            local clientCharacter = gg.client.Character
-            if not clientCharacter then return end
-            
-            local clientRoot = clientCharacter:FindFirstChild("HumanoidRootPart") or clientCharacter:FindFirstChild("Torso")
-            if not clientRoot then return end
-            
-            local targetRoot = humanoid.Parent:FindFirstChild("HumanoidRootPart") or humanoid.Parent:FindFirstChild("Torso")
-            if not targetRoot then return end
-            
-            -- Server distance check (CombatDamageServer.lua validates <= 12 studs)
-            local distance = (clientRoot.Position - targetRoot.Position).Magnitude
-            if distance >= hitboxExtender.MaxServerDistance then
-                return  -- Server will reject
+        -- Find nearby enemies
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= gg.client and player.Character then
+                local enemyCharacter = player.Character
+                local enemyHRP = enemyCharacter:FindFirstChild("HumanoidRootPart")
+                local enemyHumanoid = enemyCharacter:FindFirstChild("Humanoid")
+                local enemyTorso = enemyCharacter:FindFirstChild("Torso")
+                
+                if enemyHRP and enemyHumanoid and enemyTorso and enemyHumanoid.Health > 0 then
+                    local distance = (myHRP.Position - enemyHRP.Position).Magnitude
+                    
+                    -- If enemy is within range but outside normal blade reach
+                    if distance <= hitboxExtender.Range and distance > 5 then
+                        -- Save original position
+                        local originalCFrame = enemyHRP.CFrame
+                        
+                        -- Briefly teleport enemy's HumanoidRootPart to touch blade
+                        -- This makes blade:GetTouchingParts() detect them
+                        pcall(function()
+                            -- Move enemy torso to blade position
+                            enemyTorso.CFrame = tip.CFrame
+                            
+                            -- Immediately restore (next frame)
+                            task.defer(function()
+                                pcall(function()
+                                    enemyTorso.CFrame = originalCFrame * CFrame.new(0, -3, 0) + (originalCFrame.Position - enemyTorso.Position)
+                                end)
+                            end)
+                        end)
+                        
+                        lastPull = tick()
+                        break  -- Only one enemy per swing
+                    end
+                end
             end
-            
-            -- Deal damage
-            gg.kopis.damage(humanoid, part)
-        end)
-        
-        local deathBind = humanoid.Died:Connect(function()
-            proxy:Destroy()
-        end)
-        
-        table.insert(hitboxExtender.DiedBinds, deathBind)
-        table.insert(hitboxExtender.Parts, proxy)
-    end
-    
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= gg.client then
-            createHitbox(player)
-            local added = player.CharacterAdded:Connect(function()
-                task.wait(0.5)
-                createHitbox(player)
-            end)
-            table.insert(hitboxExtender.CharacterAdded, added)
         end
     end
     
-    hitboxExtender.PlayerAdded = Players.PlayerAdded:Connect(function(player)
-        if player ~= gg.client then
-            player.CharacterAdded:Wait()
-            task.wait(0.5)
-            createHitbox(player)
-            local added = player.CharacterAdded:Connect(function()
-                task.wait(0.5)
-                createHitbox(player)
-            end)
-            table.insert(hitboxExtender.CharacterAdded, added)
+    -- Monitor for mouse clicks (swings)
+    self.SwingConnection = UserInputService.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            -- Small delay to let swing animation start
+            task.delay(0.05, pullEnemiesToBlade)
+            task.delay(0.15, pullEnemiesToBlade)
+            task.delay(0.25, pullEnemiesToBlade)
         end
     end)
 end
@@ -138,16 +113,10 @@ newKeybind:Bind(function(key)
     hitboxExtender.Keybind = key
 end)
 
--- Max slider at 11 (server limit is 12)
-local newSlider = gg.slider.new(gg.ui:WaitForChild("Menu").Settings.hitboxExtender.Slider, 5, 11, 1)
+local newSlider = gg.slider.new(gg.ui:WaitForChild("Menu").Settings.hitboxExtender.Slider, 5, 20, 1)
 
 newSlider:Bind(function(val)
-    hitboxExtender.Size = val
-    for _,proxy in pairs(hitboxExtender.Parts) do
-        if proxy then
-            proxy:SetSize(Vector3.new(hitboxExtender.Size, hitboxExtender.Size, hitboxExtender.Size))
-        end
-    end
+    hitboxExtender.Range = val
 end)
 
 local label
