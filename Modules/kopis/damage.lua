@@ -154,15 +154,23 @@ function kopis.damage(humanoid, part)
         return
     end
     
+    local character = humanoid.Parent
+    if not character then
+        return
+    end
+    
+    local player = Players:GetPlayerFromCharacter(character)
+    if not player then
+        return
+    end
+    
     if tick() - lastEventFiredAt < 0.7 then
         return
     end
     
-    if humanoid == gg.client.Character and gg.client.Character:FindFirstChild("Humanoid") then
+    if humanoid == gg.client.Character:FindFirstChild("Humanoid") then
         return
     end
-    
-    local player = Players:GetPlayerFromCharacter(humanoid.Parent)
     if not player then
         return
     end
