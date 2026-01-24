@@ -1,8 +1,5 @@
 --[[
-    damage.lua (FIXED - Game Bug Workaround)
-    
-    The game has a bug where it calls GetPlayerFromCharacter on a RemoteEvent.
-    We fix this by adding GetPlayerFromCharacter to the RemoteEvent.
+    damage.lua (CLEAN - No Metahook)
 --]]
 
 local lastHit = os.clock()
@@ -29,29 +26,6 @@ local swingSpeeds = {
 
     cooldown = .55
 }
-
--- FIX GAME BUG: Add GetPlayerFromCharacter to RemoteEvents
--- The game's KopisLocal.lua line 118 calls PlaySound:GetPlayerFromCharacter() which is wrong
--- We add this method to RemoteEvents so it doesn't error
-pcall(function()
-    local CombatEvents = game:GetService("ReplicatedStorage"):WaitForChild("CombatEvents", 5)
-    if CombatEvents then
-        local PlaySound = CombatEvents:FindFirstChild("PlaySound")
-        local DealDamage = CombatEvents:FindFirstChild("DealDamage")
-        
-        -- Add fake GetPlayerFromCharacter that redirects to Players service
-        if PlaySound then
-            PlaySound.GetPlayerFromCharacter = function(self, character)
-                return Players:GetPlayerFromCharacter(character)
-            end
-        end
-        if DealDamage then
-            DealDamage.GetPlayerFromCharacter = function(self, character)
-                return Players:GetPlayerFromCharacter(character)
-            end
-        end
-    end
-end)
 
 function kopis.setDamageCooldown(cooldown)
     swingSpeeds.cooldown = cooldown
@@ -179,9 +153,19 @@ function kopis.getCombatEvents()
     return nil
 end
 
+-- Main damage function - called by exploit features (hitbox, resizer, etc.)
 function kopis.damage(humanoid, part)
     if not humanoid or not humanoid:IsA("Humanoid") then
         return
+    end
+    
+    -- Team kill check (only for exploit damage)
+    local targetCharacter = humanoid.Parent
+    if targetCharacter then
+        local targetPlayer = Players:GetPlayerFromCharacter(targetCharacter)
+        if targetPlayer and gg.client and targetPlayer.Team == gg.client.Team and not kopis.teamKill then
+            return
+        end
     end
     
     local kopisTool = kopis.getKopis()
@@ -207,69 +191,30 @@ function kopis.damage(humanoid, part)
         return 
     end
     
+    -- Fire damage
     pcall(function()
         events.PlaySound:FireServer(humanoid) 
     end)
     
     lastHit = os.clock()
-end
-
--- METAHOOK: Intercepts all damage calls for team kill check and critical hits
-local mt = getrawmetatable(game)
-local old = mt.__namecall
-setreadonly(mt, false)
-
-mt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
     
-    if method == "FireServer" and typeof(self) == "Instance" then
-        local events = kopis.getCombatEvents()
+    -- Critical hit (only for exploit damage)
+    if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
+        local critData = gg.getCriticalHitData()
+        local chanceNum = math.random(0, 100)
         
-        if events and self == events.PlaySound then
-            local firstArg = args[1]
-            
-            -- Skip os.clock() calls (game sends this on load)
-            if typeof(firstArg) == "number" then
-                return old(self, ...)
-            end
-            
-            -- Process humanoid (damage call)
-            if firstArg and typeof(firstArg) == "Instance" and firstArg:IsA("Humanoid") then
-                local humanoid = firstArg
-                local targetCharacter = humanoid.Parent
-                
-                if targetCharacter then
-                    local player = Players:GetPlayerFromCharacter(targetCharacter)
-                    
-                    if player then
-                        -- Team kill prevention
-                        if player.Team == gg.client.Team and not kopis.teamKill then
-                            return
-                        end
-                        
-                        -- Critical hit system
-                        if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
-                            local critData = gg.getCriticalHitData()
-                            local chanceNum = math.random(0, 100)
-                            
-                            if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
-                                task.spawn(function()
-                                    task.wait(critData.Delay)
-                                    lastCrit = os.clock()
-                                    old(self, humanoid)
-                                end)
-                            end
-                        end
-                    end
-                end
-            end
+        if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
+            task.spawn(function()
+                task.wait(critData.Delay)
+                lastCrit = os.clock()
+                pcall(function()
+                    events.PlaySound:FireServer(humanoid)
+                end)
+            end)
         end
     end
-    
-    return old(self, ...)
-end)
+end
 
-setreadonly(mt, true)
+-- NO METAHOOK - Game handles its own damage normally
 
 return kopis
