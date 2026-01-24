@@ -2,6 +2,8 @@ local lastHit = os.clock()
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
+print("[DAMAGE.LUA] Starting load...")
+
 local kopis = {
     authorizedHit = true,
     teamKill = false,
@@ -23,12 +25,15 @@ local swingSpeeds = {
 }
 
 if not gg or not gg.client then
-    warn("damage.lua: gg or gg.client is not defined! Script may not work correctly.")
+    warn("[DAMAGE.LUA] ERROR: gg or gg.client is not defined!")
     return kopis
 end
 
+print("[DAMAGE.LUA] gg.client found:", gg.client.Name)
+
 function kopis.setDamageCooldown(cooldown)
     swingSpeeds.cooldown = cooldown
+    print("[DAMAGE.LUA] Set cooldown to:", cooldown)
 end
 
 function kopis.getDefaultSwingSpeeds()
@@ -119,34 +124,48 @@ function kopis.getCombatEvents()
 end
 
 function kopis.damage(humanoid, part)
+    print("[DAMAGE.LUA] damage() called")
+    
     if not humanoid or not humanoid:IsA("Humanoid") then
+        print("[DAMAGE.LUA] Invalid humanoid")
         return
     end
     
     if not part or not part.Parent or not part.Parent:IsA("Tool") then
+        print("[DAMAGE.LUA] Invalid part")
         return
     end
 
     local tool = kopis.getKopis()
     if not tool then
+        print("[DAMAGE.LUA] No kopis found")
         return
     end
 
     local tip = tool:FindFirstChild("Tip", true)
     if not tip or part ~= tip then
+        print("[DAMAGE.LUA] Part is not tip")
         return
     end
+    
     if os.clock() - lastHit < swingSpeeds.cooldown then
+        print("[DAMAGE.LUA] Cooldown active")
         return
     end
     
     local player = Players:GetPlayerFromCharacter(humanoid.Parent)
     if player and player.Team == gg.client.Team and not kopis.teamKill then
+        print("[DAMAGE.LUA] Blocked team kill")
         return
     end
     
     local events = kopis.getCombatEvents()
-    if not events or not events.PlaySound or not events.DealDamage then return end
+    if not events or not events.PlaySound or not events.DealDamage then 
+        print("[DAMAGE.LUA] Events not found")
+        return 
+    end
+    
+    print("[DAMAGE.LUA] Firing PlaySound for:", humanoid.Parent.Name)
     pcall(function()
         events.PlaySound:FireServer(humanoid) 
     end)
@@ -159,13 +178,19 @@ function kopis.damage(humanoid, part)
             local chanceNum = math.random(0, 100)
             
             if chanceNum <= critData.Chance then
-                task.wait(critData.Delay)
-                pcall(function()
-                    events.PlaySound:FireServer(humanoid)
+                print("[DAMAGE.LUA] Critical hit triggered!")
+                task.spawn(function()
+                    task.wait(critData.Delay)
+                    pcall(function()
+                        events.PlaySound:FireServer(humanoid)
+                    end)
                 end)
             end
         end
     end
 end
+
+print("[DAMAGE.LUA] Loaded successfully!")
+print("[DAMAGE.LUA] Team Kill enabled:", kopis.teamKill)
 
 return kopis
