@@ -1,226 +1,168 @@
 --[[
-    damage.lua (CLEAN - No Metahook)
+    proxy.lua (Simple Version - Visual Only)
     
-    NO METAHOOK VERSION - Let the game handle damage normally.
+    Creates invisible proxy parts that follow targets.
+    Used for visual hitbox display only - damage won't register on server.
     
-    The metahook was breaking the game's damage system.
-    Your exploit features (hitbox, resizer, etc.) will call kopis.damage() directly.
+    Anti-cheat bypass:
+    - Name = "Void" (anti-cheat ignores this)
+    - Parent = Camera (not monitored by anti-cheat)
 --]]
 
-local lastHit = os.clock()
-local lastCrit = os.clock()
+local proxyPart = {}
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local links = {}
+local camera = workspace.CurrentCamera
 
-local kopis = {
-    authorizedHit = true,
-    teamKill = false,
-}
+-- Hidden container for proxy parts
+local hiddenContainer = nil
+pcall(function()
+    hiddenContainer = Instance.new("Folder")
+    hiddenContainer.Name = "Camera"
+    hiddenContainer.Parent = camera
+end)
 
-local swingSpeeds = {
-    swingSpeeds = nil,
-    kopis = nil,
-
-    default = {
-        1.5;
-        1;
-        1.25;
-        1.25;
-        1;
-    },
-
-    cooldown = .55
-}
-
-function kopis.setDamageCooldown(cooldown)
-    swingSpeeds.cooldown = cooldown
-end
-
-function kopis.getDefaultSwingSpeeds()
-    return swingSpeeds.default
-end
-
-function kopis.getKopis(searchBackpack)
-    local client = gg.client
-    if not client then return nil end
-    
-    local character = client.Character
-    if character then
-        local kopisTool = character:FindFirstChild("Kopis")
-        if kopisTool then
-            return kopisTool
+-- Update proxy positions every frame
+RunService.RenderStepped:Connect(function()
+    for part1, part2 in pairs(links) do
+        if not part1 or not part1.Parent or not part2 or not part2.Parent then
+            links[part1] = nil
+            continue
         end
-    end
-    
-    if searchBackpack then
-        local backpack = client:FindFirstChild("Backpack")
-        if backpack then
-            local kopisTool = backpack:FindFirstChild("Kopis")
-            if kopisTool then
-                return kopisTool
-            end
-        end
-    end
-    
-    return nil
-end
-
-function kopis.getTip(kopisTool)
-    if not kopisTool then
-        kopisTool = kopis.getKopis() or kopis.getKopis(true)
-    end
-    if not kopisTool then
-        return nil
-    end
-    
-    local toolModel = kopisTool:FindFirstChild("ToolModel")
-    if toolModel then
-        local blade = toolModel:FindFirstChild("Blade")
-        if blade then
-            local tip = blade:FindFirstChild("Tip")
-            if tip then
-                return tip
-            end
-        end
-    end
-    
-    local tip = kopisTool:FindFirstChild("Tip", true)
-    return tip
-end
-
-function kopis.getBlade(kopisTool)
-    local tip = kopis.getTip(kopisTool)
-    if tip then
-        return tip.Parent
-    end
-    return nil
-end
-
-function kopis.getSwingSpeed()
-    local kopisTool = kopis.getKopis() or kopis.getKopis(true)
-    if not kopisTool then
-        return swingSpeeds.default
-    end
-    if kopisTool == swingSpeeds.kopis then
-        return swingSpeeds.swingSpeeds
-    end
-    if not getgc then
-        return swingSpeeds.default
-    end
-    
-    for _,v in pairs(getgc()) do
-        if type(v) == "function" then
-            local success, upvalues = pcall(debug.getupvalues, v)
-            if success then
-                for x,y in pairs(upvalues) do
-                    if type(y) == "table" and rawget(y,1) == 1.5 and rawget(y,2) == 1 and rawget(y, 3) == 1.25 and rawget(y,4) == 1.25 and rawget(y, 5) == 1 then
-                        swingSpeeds.kopis, swingSpeeds.swingSpeeds = kopisTool, y
-                        return y
-                    end
-                end
-            end
-        end
-    end 
-    return swingSpeeds.default
-end
-
-function kopis.getSlashDelay()
-    if not getgc then
-        return nil
-    end
-    for _,v in pairs(getgc()) do
-        if type(v) == "function" then
-            local success, upvalues = pcall(debug.getupvalues, v)
-            if success then
-                for _,y in pairs(upvalues) do
-                    if type(y) == "table" then 
-                        if rawget(y, "slash") then 
-                            return y
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
-function kopis.getCombatEvents()
-    local success, events = pcall(function()
-        return game:GetService("ReplicatedStorage").CombatEvents
-    end)
-    if success and events then
-        return {
-            PlaySound = events:FindFirstChild("PlaySound"),
-            DealDamage = events:FindFirstChild("DealDamage"),
-            StudCount = events:FindFirstChild("StudCount")
-        }
-    end
-    return nil
-end
-
--- Main damage function - called by exploit features (hitbox, resizer, etc.)
-function kopis.damage(humanoid, part)
-    if not humanoid or not humanoid:IsA("Humanoid") then
-        return
-    end
-    
-    -- Team kill check (only for exploit damage)
-    local targetCharacter = humanoid.Parent
-    if targetCharacter then
-        local targetPlayer = Players:GetPlayerFromCharacter(targetCharacter)
-        if targetPlayer and gg.client and targetPlayer.Team == gg.client.Team and not kopis.teamKill then
-            return
-        end
-    end
-    
-    local kopisTool = kopis.getKopis()
-    if not kopisTool then
-        return
-    end
-
-    local tip = kopis.getTip(kopisTool)
-    if not tip then
-        return
-    end
-    
-    if part and part ~= tip then
-        return
-    end
-    
-    if os.clock() - lastHit < swingSpeeds.cooldown then
-        return
-    end
-    
-    local events = kopis.getCombatEvents()
-    if not events or not events.PlaySound then 
-        return 
-    end
-    
-    -- Fire damage
-    pcall(function()
-        events.PlaySound:FireServer(humanoid) 
-    end)
-    
-    lastHit = os.clock()
-    
-    -- Critical hit (only for exploit damage)
-    if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
-        local critData = gg.getCriticalHitData()
-        local chanceNum = math.random(0, 100)
         
-        if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
-            task.spawn(function()
-                task.wait(critData.Delay)
-                lastCrit = os.clock()
-                pcall(function()
-                    events.PlaySound:FireServer(humanoid)
-                end)
+        local _, proxyOnScreen = camera:WorldToScreenPoint(part1.Position)
+        local _, playerOnScreen = camera:WorldToScreenPoint(part2.Position)
+        
+        if proxyOnScreen or playerOnScreen then
+            pcall(function()
+                part1.CFrame = part2.CFrame
             end)
         end
     end
+end)
+
+-- Bind touch callback
+function proxyPart:BindTouch(func)
+    if not self.Part then
+        return
+    end
+    
+    if #self.TouchedBindings == 0 and not self.TouchedConnection then
+        self.TouchedConnection = self.Part.Touched:Connect(function(part)
+            for _, touchFunc in pairs(self.TouchedBindings) do
+                pcall(touchFunc, part)
+            end
+        end)
+    end
+    
+    table.insert(self.TouchedBindings, func)
 end
 
--- NO METAHOOK - Game handles its own damage normally
--- Your exploit features call kopis.damage() for extended hitbox/resizer hits
+-- Destroy proxy
+function proxyPart:Destroy()
+    if links[self.Part] then
+        links[self.Part] = nil
+    end
+    
+    if self.TouchedConnection then
+        self.TouchedConnection:Disconnect()
+        self.TouchedConnection = nil
+    end
+    
+    if self.selectionBox then
+        self.selectionBox:Destroy()
+        self.selectionBox = nil
+    end
+    
+    if self.Part then
+        self.Part:Destroy()
+        self.Part = nil
+    end
+end
 
-return kopis
+-- Create visible outline around proxy
+function proxyPart:CreateOutline()
+    if not self.Part then
+        return
+    end
+    
+    if self.selectionBox then
+        self.selectionBox:Destroy()
+        self.selectionBox = nil
+    end
+    
+    local selectionBox = Instance.new("SelectionBox")
+    selectionBox.Color3 = Color3.new(1, 1, 1)
+    selectionBox.LineThickness = 0.025
+    selectionBox.Adornee = self.Part
+    selectionBox.Parent = self.Part
+    self.selectionBox = selectionBox
+end
+
+-- Set proxy size
+function proxyPart:SetSize(Vector, Offset)
+    if not self.Part or not Vector then
+        return
+    end
+    
+    pcall(function()
+        self.Part.Size = Vector
+    end)
+end
+
+-- Link proxy to follow a part
+function proxyPart:Link(Part, Weld, Offset)
+    if not self.Part or not Part then
+        return
+    end
+    
+    -- Parent to camera to avoid anti-cheat detection
+    if hiddenContainer then
+        self.Part.Parent = hiddenContainer
+    else
+        self.Part.Parent = camera
+    end
+    
+    self.Part.Transparency = 1
+    self.Part.CanCollide = false
+    self.Part.CanQuery = false
+    self.Part.CanTouch = true
+    
+    if Weld then
+        pcall(function()
+            self.Part.CFrame = Part.CFrame
+            local WeldInstance = Instance.new("Weld")
+            WeldInstance.C0 = Part.CFrame:Inverse() * self.Part.CFrame
+            WeldInstance.Part0 = Part
+            WeldInstance.Part1 = self.Part
+            WeldInstance.Parent = self.Part
+        end)
+    else
+        self.Part.Anchored = true
+        links[self.Part] = Part
+    end
+end
+
+-- Create new proxy part
+function proxyPart.new()
+    local newPart = Instance.new("Part")
+    newPart.Name = "Void"  -- Anti-cheat ignores parts named "Void"
+    
+    return setmetatable({
+        Part = newPart,
+        TouchedBindings = {},
+        TouchedConnection = nil,
+        Offset = nil,
+    }, {
+        __index = function(self, index)
+            if proxyPart[index] then
+                return function(self, ...)
+                    return proxyPart[index](self, ...)
+                end
+            end
+        end
+    })
+end
+
+return proxyPart
