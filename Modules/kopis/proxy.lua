@@ -1,11 +1,10 @@
 --[[
-    proxy.lua (FIXED - Triggers Game's Own Hit Detection)
+    proxy.lua (Simple Version - Visual Only)
     
-    Instead of firing the remote directly (server rejects),
-    this version teleports the enemy part to touch the REAL blade
-    so the game's own blade:GetTouchingParts() detects it.
     
-    Anti-cheat bypass: Parts named "Void" and parented to Camera
+    Anti-cheat bypass:
+    - Name = "Void" (anti-cheat ignores this)
+    - Parent = Camera (not monitored by anti-cheat)
 --]]
 
 local proxyPart = {}
@@ -22,7 +21,7 @@ pcall(function()
     hiddenContainer.Parent = camera
 end)
 
--- Update proxy positions
+-- Update proxy positions every frame
 RunService.RenderStepped:Connect(function()
     for part1, part2 in pairs(links) do
         if not part1 or not part1.Parent or not part2 or not part2.Parent then
@@ -41,6 +40,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- Bind touch callback
 function proxyPart:BindTouch(func)
     if not self.Part then
         return
@@ -48,7 +48,7 @@ function proxyPart:BindTouch(func)
     
     if #self.TouchedBindings == 0 and not self.TouchedConnection then
         self.TouchedConnection = self.Part.Touched:Connect(function(part)
-            for _,touchFunc in pairs(self.TouchedBindings) do
+            for _, touchFunc in pairs(self.TouchedBindings) do
                 pcall(touchFunc, part)
             end
         end)
@@ -57,54 +57,7 @@ function proxyPart:BindTouch(func)
     table.insert(self.TouchedBindings, func)
 end
 
--- NEW: Bind touch that triggers game's blade detection
-function proxyPart:BindTouchWithBlade(targetHumanoid)
-    if not self.Part then
-        return
-    end
-    
-    if self.BladeConnection then
-        self.BladeConnection:Disconnect()
-        self.BladeConnection = nil
-    end
-    
-    self.BladeConnection = self.Part.Touched:Connect(function(part)
-        -- Check if it's a kopis blade/tip
-        if not part or not part.Parent then return end
-        if not part.Parent:IsA("Tool") then return end
-        
-        local tip = gg.kopis.getTip(part.Parent)
-        if not tip or part ~= tip then return end
-        
-        -- Get the real blade
-        local blade = tip
-        
-        -- Get target character
-        if not targetHumanoid or not targetHumanoid.Parent then return end
-        local targetCharacter = targetHumanoid.Parent
-        local targetTorso = targetCharacter:FindFirstChild("Torso") or targetCharacter:FindFirstChild("HumanoidRootPart")
-        
-        if not targetTorso then return end
-        
-        -- Teleport target torso to blade position momentarily
-        -- This makes the game's blade:GetTouchingParts() detect them
-        local originalCFrame = targetTorso.CFrame
-        local originalAnchored = targetTorso.Anchored
-        
-        pcall(function()
-            -- Brief teleport to blade
-            targetTorso.CFrame = blade.CFrame
-            
-            -- Restore immediately (next frame the game will have detected the touch)
-            task.defer(function()
-                pcall(function()
-                    targetTorso.CFrame = originalCFrame
-                end)
-            end)
-        end)
-    end)
-end
-
+-- Destroy proxy
 function proxyPart:Destroy()
     if links[self.Part] then
         links[self.Part] = nil
@@ -113,11 +66,6 @@ function proxyPart:Destroy()
     if self.TouchedConnection then
         self.TouchedConnection:Disconnect()
         self.TouchedConnection = nil
-    end
-    
-    if self.BladeConnection then
-        self.BladeConnection:Disconnect()
-        self.BladeConnection = nil
     end
     
     if self.selectionBox then
@@ -131,6 +79,7 @@ function proxyPart:Destroy()
     end
 end
 
+-- Create visible outline around proxy
 function proxyPart:CreateOutline()
     if not self.Part then
         return
@@ -149,6 +98,7 @@ function proxyPart:CreateOutline()
     self.selectionBox = selectionBox
 end
 
+-- Set proxy size
 function proxyPart:SetSize(Vector, Offset)
     if not self.Part or not Vector then
         return
@@ -159,12 +109,13 @@ function proxyPart:SetSize(Vector, Offset)
     end)
 end
 
+-- Link proxy to follow a part
 function proxyPart:Link(Part, Weld, Offset)
     if not self.Part or not Part then
         return
     end
     
-    -- Parent to camera to avoid anti-cheat
+    -- Parent to camera to avoid anti-cheat detection
     if hiddenContainer then
         self.Part.Parent = hiddenContainer
     else
@@ -191,15 +142,15 @@ function proxyPart:Link(Part, Weld, Offset)
     end
 end
 
+-- Create new proxy part
 function proxyPart.new()
     local newPart = Instance.new("Part")
-    newPart.Name = "Void" -- Anti-cheat ignores "Void"
+    newPart.Name = "Void"  -- Anti-cheat ignores parts named "Void"
     
     return setmetatable({
         Part = newPart,
         TouchedBindings = {},
         TouchedConnection = nil,
-        BladeConnection = nil,
         Offset = nil,
     }, {
         __index = function(self, index)
