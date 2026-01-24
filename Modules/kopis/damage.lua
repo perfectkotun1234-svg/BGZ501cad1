@@ -1,8 +1,3 @@
---[[
-    damage.lua
-    @author kalli666 
---]]
-
 local lastHit = os.clock()
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -26,6 +21,11 @@ local swingSpeeds = {
 
     cooldown = .55
 }
+
+if not gg or not gg.client then
+    warn("damage.lua: gg or gg.client is not defined! Script may not work correctly.")
+    return kopis
+end
 
 function kopis.setDamageCooldown(cooldown)
     swingSpeeds.cooldown = cooldown
@@ -157,6 +157,7 @@ setreadonly(mt, false)
 mt.__namecall = newcclosure(function(self, ...)
     local method = getnamecallmethod()
     local args = {...}
+    
     if method == "FireServer" and typeof(self) == "Instance" then
         local events = kopis.getCombatEvents()
         if events and self == events.PlaySound then
@@ -169,6 +170,7 @@ mt.__namecall = newcclosure(function(self, ...)
                     if player.Team == gg.client.Team and not kopis.teamKill then
                         return
                     end
+                    
                     if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
                         local critData = gg.getCriticalHitData()
                         local chanceNum = math.random(0, 100)
@@ -177,7 +179,7 @@ mt.__namecall = newcclosure(function(self, ...)
                             task.spawn(function()
                                 task.wait(critData.Delay)
                                 lastCrit = os.clock()
-                                events.PlaySound:FireServer(humanoid)
+                                old(events.PlaySound, "FireServer", humanoid)
                             end)
                         end
                     end
