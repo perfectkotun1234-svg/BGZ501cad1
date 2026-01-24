@@ -1,8 +1,6 @@
 --[[
     damage.lua (FIXED)
     
-    Game Remote Event Mapping (from the 4 game scripts):
-    
     KopisLocal.lua:
         ePlaySound  = combatEvents.PlaySound   -- Client fires this for DAMAGE
         eDealDamage = combatEvents.DealDamage  -- Client fires this for SOUND
