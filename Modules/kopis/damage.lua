@@ -1,5 +1,10 @@
 --[[
-    damage.lua
+    damage.lua (FIXED)
+    
+    Fixes:
+    - Swapped PlaySound/DealDamage remotes to match game
+    - Added getTip() function
+    - Fixed blade path: ToolModel > Blade > Tip
 --]]
 
 local lastHit = os.clock()
@@ -37,30 +42,66 @@ end
 function kopis.getKopis(searchPlayer)
     local client = gg.client
     if searchPlayer == true then
-        local tip = client:FindFirstChild("Tip", true)
-        if not tip or not tip.Parent:IsA("Tool") then
-            return
+        -- Search in player's backpack
+        local backpack = client:FindFirstChild("Backpack")
+        if backpack then
+            local kopisTool = backpack:FindFirstChild("Kopis")
+            if kopisTool then
+                return kopisTool
+            end
         end
-        local tool = tip.Parent
-        return tool
+        -- Search in character
+        local character = client.Character
+        if character then
+            local kopisTool = character:FindFirstChild("Kopis")
+            if kopisTool then
+                return kopisTool
+            end
+        end
+        return nil
     else
         local character = client.Character
         if not character then
-            return
+            return nil
         end
-        local tip = character:FindFirstChild("Tip", true)
-        if not tip or not tip.Parent:IsA("Tool") then
-            return
+        local kopisTool = character:FindFirstChild("Kopis")
+        if kopisTool then
+            return kopisTool
         end
-        local tool = tip.Parent
-        return tool
+        return nil
     end
+end
+
+-- NEW: Get the tip of the kopis blade
+function kopis.getTip(kopisTool)
+    if not kopisTool then
+        kopisTool = kopis.getKopis() or kopis.getKopis(true)
+    end
+    if not kopisTool then
+        return nil
+    end
+    
+    -- Path: Kopis > ToolModel > Blade > Tip (based on KopisLocal.lua)
+    local toolModel = kopisTool:FindFirstChild("ToolModel")
+    if toolModel then
+        local blade = toolModel:FindFirstChild("Blade")
+        if blade then
+            local tip = blade:FindFirstChild("Tip")
+            if tip then
+                return tip
+            end
+        end
+    end
+    
+    -- Fallback: recursive search
+    local tip = kopisTool:FindFirstChild("Tip", true)
+    return tip
 end
 
 function kopis.getSwingSpeed()
     local kopisTool = kopis.getKopis() or kopis.getKopis(true)
     if not kopisTool then
-        return
+        return swingSpeeds.default
     end
     if kopisTool == swingSpeeds.kopis then
         return swingSpeeds.swingSpeeds
@@ -108,10 +149,17 @@ function kopis.getCombatEvents()
     local success, events = pcall(function()
         return game:GetService("ReplicatedStorage").CombatEvents
     end)
-    if success then
+    if success and events then
+        --[[
+            FIXED: The game has these SWAPPED in CombatDamageServer.lua:
+            eDealDamage = combatEvents.PlaySound  (PlaySound actually deals damage)
+            ePlaySound  = combatEvents.DealDamage (DealDamage actually plays sound)
+            
+            So we swap them here to match:
+        --]]
         return {
-            PlaySound = events:FindFirstChild("PlaySound"),
-            DealDamage = events:FindFirstChild("DealDamage")
+            DealDamage = events:FindFirstChild("PlaySound"),  -- SWAPPED
+            PlaySound = events:FindFirstChild("DealDamage")   -- SWAPPED
         }
     end
     return nil
@@ -122,26 +170,32 @@ function kopis.damage(humanoid, part)
         return
     end
     
-    if not part or not part.Parent or not part.Parent:IsA("Tool") then
+    local kopisTool = kopis.getKopis()
+    if not kopisTool then
         return
     end
 
-    local tool = kopis.getKopis()
-    if not tool then
+    local tip = kopis.getTip(kopisTool)
+    if not tip then
         return
     end
-
-    local tip = tool:FindFirstChild("Tip", true)
-    if not tip or part ~= tip then
+    
+    -- If part is provided, verify it's the tip
+    if part and part ~= tip then
         return
     end
+    
     if os.clock() - lastHit < swingSpeeds.cooldown then
         return
     end
+    
     local events = kopis.getCombatEvents()
-    if not events or not events.PlaySound or not events.DealDamage then return end
+    if not events or not events.DealDamage then 
+        return 
+    end
+    
     pcall(function()
-        events.PlaySound:FireServer(humanoid) 
+        events.DealDamage:FireServer(humanoid) 
     end)
     
     lastHit = os.clock()
@@ -156,18 +210,24 @@ setreadonly(mt, false)
 mt.__namecall = newcclosure(function(self, ...)
     local method = getnamecallmethod()
     local args = {...}
+    
     if method == "FireServer" and typeof(self) == "Instance" then
         local events = kopis.getCombatEvents()
-        if events and self == events.PlaySound then
+        
+        -- Check if this is a damage event (remember: DealDamage = PlaySound remote)
+        if events and self == events.DealDamage then
             local humanoid = args[1]
             
             if humanoid and humanoid:IsA("Humanoid") then
                 local player = Players:GetPlayerFromCharacter(humanoid.Parent)
                 
                 if player then
+                    -- Team kill check
                     if player.Team == gg.client.Team and not kopis.teamKill then
                         return
                     end
+                    
+                    -- Critical hit check
                     if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
                         local critData = gg.getCriticalHitData()
                         local chanceNum = math.random(0, 100)
@@ -176,7 +236,7 @@ mt.__namecall = newcclosure(function(self, ...)
                             task.spawn(function()
                                 task.wait(critData.Delay)
                                 lastCrit = os.clock()
-                                events.PlaySound:FireServer(humanoid)
+                                events.DealDamage:FireServer(humanoid)
                             end)
                         end
                     end
