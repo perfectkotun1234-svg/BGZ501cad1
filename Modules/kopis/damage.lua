@@ -1,7 +1,6 @@
 local lastHit = os.clock()
 local playerCooldowns = {}
-local lastSwingTime = 0
-local isSwinging = false
+local lastEventFiredAt = tick() - 100
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
@@ -157,7 +156,7 @@ function kopis.damage(humanoid, part)
         return
     end
     
-    if os.clock() - lastSwingTime > 0.7 then
+    if tick() - lastEventFiredAt > 0.7 then
         return
     end
     
@@ -175,7 +174,7 @@ function kopis.damage(humanoid, part)
     end
     
     local playerCooldown = playerCooldowns[player.UserId] or 0
-    if os.clock() - playerCooldown < swingSpeeds.cooldown then
+    if tick() - playerCooldown < 0.7 then
         return
     end
     
@@ -190,7 +189,7 @@ function kopis.damage(humanoid, part)
     end)
     
     if success then
-        playerCooldowns[player.UserId] = os.clock()
+        playerCooldowns[player.UserId] = tick()
         
         if gg.getCriticalHitData then
             local critData = gg.getCriticalHitData()
@@ -215,16 +214,14 @@ local old = mt.__namecall
 setreadonly(mt, false)
 
 mt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
+    local arguments = {...}
     
-    if method == "FireServer" and typeof(self) == "Instance" then
-        if self.Name == "PlaySound" or self.Name == "DealDamage" then
-            lastSwingTime = os.clock()
-            isSwinging = true
-            task.delay(0.7, function()
-                isSwinging = false
-            end)
+    if typeof(self) == "Instance" and self.Name and (self.Name == "PlaySound" or self.Name == "DealDamage") then
+        if tick() - lastEventFiredAt < 0.7 then
+            return old(self, ...)
         end
+        
+        lastEventFiredAt = tick()
     end
     
     return old(self, ...)
