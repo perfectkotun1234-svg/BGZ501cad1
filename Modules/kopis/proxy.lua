@@ -1,11 +1,25 @@
 --[[
-    proxy.lua
+    proxy.lua (FIXED - Anti-Cheat Bypass)
+    
+    The game has an anti-cheat (partCreator) that detects new parts in Workspace
+    and reports them to the server via "partt" RemoteEvent.
+    
+    Fix: Parent parts to Camera or nil, use different detection method
 --]]
 
 local proxyPart = {}
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 local links = {}
 local camera = workspace.CurrentCamera
+
+-- Create a hidden container that won't trigger anti-cheat
+local hiddenContainer = nil
+pcall(function()
+    hiddenContainer = Instance.new("Folder")
+    hiddenContainer.Name = "Camera" -- Innocent name
+    hiddenContainer.Parent = camera -- Parent to camera, not workspace
+end)
 
 RunService.RenderStepped:Connect(function()
     for part1, part2 in pairs(links) do
@@ -95,9 +109,18 @@ function proxyPart:Link(Part, Weld, Offset)
         return
     end
     
-    self.Part.Parent = game:GetService("Workspace")
+    -- FIXED: Parent to camera instead of workspace to avoid anti-cheat detection
+    -- The partCreator script only monitors workspace.ChildAdded
+    if hiddenContainer then
+        self.Part.Parent = hiddenContainer
+    else
+        self.Part.Parent = camera
+    end
+    
     self.Part.Transparency = 1
     self.Part.CanCollide = false
+    self.Part.CanQuery = false -- Extra stealth
+    self.Part.CanTouch = true -- But still detect touches
     
     if Weld then
         pcall(function()
@@ -116,7 +139,7 @@ end
 
 function proxyPart.new()
     local newPart = Instance.new("Part")
-    newPart.Name = "ProxyPart"
+    newPart.Name = "Void" -- Use "Void" - the anti-cheat ignores parts named "Void"!
     
     return setmetatable({
         Part = newPart,
