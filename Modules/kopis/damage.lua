@@ -1,7 +1,7 @@
 local lastHit = os.clock()
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
-print("hello damage.lua for sure loaded")
+
 local kopis = {
     authorizedHit = true,
     teamKill = false,
@@ -168,25 +168,23 @@ mt.__namecall = newcclosure(function(self, ...)
                 
                 if player and gg and gg.client then
                     if player.Team == gg.client.Team and not kopis.teamKill then
-                        print("[DAMAGE.LUA] Blocked team kill attempt")
                         return
                     end
-                    
-                    if gg.getCriticalHitData then
-                        local critDataFunc = gg.getCriticalHitData()
-                        if critDataFunc and critDataFunc.Activated then
-                            local critData = critDataFunc
-                            local chanceNum = math.random(0, 100)
-                            
-                            if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
-                                task.spawn(function()
-                                    task.wait(critData.Delay)
-                                    lastCrit = os.clock()
-                                    pcall(function()
-                                        events.PlaySound:FireServer(humanoid)
-                                    end)
+                end
+                
+                if gg.getCriticalHitData then
+                    local critData = gg.getCriticalHitData()
+                    if critData and critData.Activated and player then
+                        local chanceNum = math.random(0, 100)
+                        
+                        if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
+                            task.spawn(function()
+                                task.wait(critData.Delay)
+                                lastCrit = os.clock()
+                                pcall(function()
+                                    events.PlaySound:FireServer(humanoid)
                                 end)
-                            end
+                            end)
                         end
                     end
                 end
@@ -198,7 +196,5 @@ mt.__namecall = newcclosure(function(self, ...)
 end)
 
 setreadonly(mt, true)
-
-print("[DAMAGE.LUA] Loaded successfully - Team Kill:", kopis.teamKill)
 
 return kopis
