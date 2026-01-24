@@ -18,7 +18,7 @@ function shieldBypass:On()
         local kopis = gg.kopis.getKopis()
         if not kopis then return end
         
-        local tip = kopis:FindFirstChild("Tip", true)
+        local tip = gg.kopis.getTip(kopis)
         
         if tip then
             if shieldBypass.TouchedConnection then
@@ -34,10 +34,7 @@ function shieldBypass:On()
                         if humanoid then
                             local chanceNumber = math.random(0, 100)
                             if chanceNumber <= shieldBypass.Chance then
-                                local currentTip = gg.kopis.getKopis() and gg.kopis.getKopis():FindFirstChild("Tip", true)
-                                if currentTip then
-                                    gg.kopis.damage(humanoid, currentTip)
-                                end
+                                gg.kopis.damage(humanoid, tip)
                             end
                         end
                     end
@@ -54,12 +51,9 @@ function shieldBypass:On()
         end
         
         shieldBypass.Connection2 = character.ChildAdded:Connect(function(obj)
-            if obj:IsA("Tool") then
-                local kopis = gg.kopis.getKopis()
-                if obj == kopis then
-                    task.wait(0.1)
-                    bindTouch()
-                end
+            if obj:IsA("Tool") and obj.Name == "Kopis" then
+                task.wait(0.1)
+                bindTouch()
             end
         end)
     end
