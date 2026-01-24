@@ -139,6 +139,12 @@ function kopis.damage(humanoid, part)
     if os.clock() - lastHit < swingSpeeds.cooldown then
         return
     end
+    
+    local player = Players:GetPlayerFromCharacter(humanoid.Parent)
+    if player and player.Team == gg.client.Team and not kopis.teamKill then
+        return
+    end
+    
     local events = kopis.getCombatEvents()
     if not events or not events.PlaySound or not events.DealDamage then return end
     pcall(function()
@@ -146,55 +152,20 @@ function kopis.damage(humanoid, part)
     end)
     
     lastHit = os.clock()
-end
-
-local lastCrit = os.clock()
-
-local mt = getrawmetatable(game)
-local old = mt.__namecall
-setreadonly(mt, false)
-
-mt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
     
-    if method == "FireServer" and typeof(self) == "Instance" then
-        local events = kopis.getCombatEvents()
-        if events and events.PlaySound and self == events.PlaySound then
-            local humanoid = args[1]
+    if gg.getCriticalHitData then
+        local critData = gg.getCriticalHitData()
+        if critData and critData.Activated and player then
+            local chanceNum = math.random(0, 100)
             
-            if humanoid and humanoid:IsA("Humanoid") then
-                local player = Players:GetPlayerFromCharacter(humanoid.Parent)
-                
-                if player and gg and gg.client then
-                    if player.Team == gg.client.Team and not kopis.teamKill then
-                        return
-                    end
-                end
-                
-                if gg.getCriticalHitData then
-                    local critData = gg.getCriticalHitData()
-                    if critData and critData.Activated and player then
-                        local chanceNum = math.random(0, 100)
-                        
-                        if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
-                            task.spawn(function()
-                                task.wait(critData.Delay)
-                                lastCrit = os.clock()
-                                pcall(function()
-                                    events.PlaySound:FireServer(humanoid)
-                                end)
-                            end)
-                        end
-                    end
-                end
+            if chanceNum <= critData.Chance then
+                task.wait(critData.Delay)
+                pcall(function()
+                    events.PlaySound:FireServer(humanoid)
+                end)
             end
         end
     end
-    
-    return old(self, ...)
-end)
-
-setreadonly(mt, true)
+end
 
 return kopis
