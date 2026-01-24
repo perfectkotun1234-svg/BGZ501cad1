@@ -1,11 +1,8 @@
 --[[
-    damage.lua (FIXED - With Metahook)
+    damage.lua (FIXED - Game Bug Workaround)
     
-    Game Remote Event Mapping:
-    PlaySound = used for dealing damage
-    DealDamage = used for playing sounds
-    
-    Includes metahook for team kill prevention and critical hits on ALL damage.
+    The game has a bug where it calls GetPlayerFromCharacter on a RemoteEvent.
+    We fix this by adding GetPlayerFromCharacter to the RemoteEvent.
 --]]
 
 local lastHit = os.clock()
@@ -32,6 +29,29 @@ local swingSpeeds = {
 
     cooldown = .55
 }
+
+-- FIX GAME BUG: Add GetPlayerFromCharacter to RemoteEvents
+-- The game's KopisLocal.lua line 118 calls PlaySound:GetPlayerFromCharacter() which is wrong
+-- We add this method to RemoteEvents so it doesn't error
+pcall(function()
+    local CombatEvents = game:GetService("ReplicatedStorage"):WaitForChild("CombatEvents", 5)
+    if CombatEvents then
+        local PlaySound = CombatEvents:FindFirstChild("PlaySound")
+        local DealDamage = CombatEvents:FindFirstChild("DealDamage")
+        
+        -- Add fake GetPlayerFromCharacter that redirects to Players service
+        if PlaySound then
+            PlaySound.GetPlayerFromCharacter = function(self, character)
+                return Players:GetPlayerFromCharacter(character)
+            end
+        end
+        if DealDamage then
+            DealDamage.GetPlayerFromCharacter = function(self, character)
+                return Players:GetPlayerFromCharacter(character)
+            end
+        end
+    end
+end)
 
 function kopis.setDamageCooldown(cooldown)
     swingSpeeds.cooldown = cooldown
