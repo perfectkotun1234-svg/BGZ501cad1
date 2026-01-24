@@ -1,6 +1,8 @@
 --[[
     damage.lua (FIXED)
     
+    Game Remote Event Mapping (from the 4 game scripts):
+    
     KopisLocal.lua:
         ePlaySound  = combatEvents.PlaySound   -- Client fires this for DAMAGE
         eDealDamage = combatEvents.DealDamage  -- Client fires this for SOUND
@@ -234,28 +236,39 @@ mt.__namecall = newcclosure(function(self, ...)
         
         -- Check if this is the damage remote (PlaySound)
         if events and self == events.PlaySound then
-            local humanoid = args[1]
+            local firstArg = args[1]
             
-            if humanoid and typeof(humanoid) == "Instance" and humanoid:IsA("Humanoid") then
-                local player = Players:GetPlayerFromCharacter(humanoid.Parent)
+            -- Skip if it's os.clock() call (number) - game does this on load
+            if typeof(firstArg) == "number" then
+                return old(self, ...)
+            end
+            
+            -- Only process if it's a Humanoid (damage call)
+            if firstArg and typeof(firstArg) == "Instance" and firstArg:IsA("Humanoid") then
+                local humanoid = firstArg
+                local targetCharacter = humanoid.Parent
                 
-                if player then
-                    -- Team kill prevention (unless enabled)
-                    if player.Team == gg.client.Team and not kopis.teamKill then
-                        return
-                    end
+                if targetCharacter then
+                    local player = Players:GetPlayerFromCharacter(targetCharacter)
                     
-                    -- Critical hit system
-                    if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
-                        local critData = gg.getCriticalHitData()
-                        local chanceNum = math.random(0, 100)
+                    if player then
+                        -- Team kill prevention (unless enabled)
+                        if player.Team == gg.client.Team and not kopis.teamKill then
+                            return
+                        end
                         
-                        if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
-                            task.spawn(function()
-                                task.wait(critData.Delay)
-                                lastCrit = os.clock()
-                                events.PlaySound:FireServer(humanoid)
-                            end)
+                        -- Critical hit system
+                        if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
+                            local critData = gg.getCriticalHitData()
+                            local chanceNum = math.random(0, 100)
+                            
+                            if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
+                                task.spawn(function()
+                                    task.wait(critData.Delay)
+                                    lastCrit = os.clock()
+                                    old(self, humanoid)
+                                end)
+                            end
                         end
                     end
                 end
