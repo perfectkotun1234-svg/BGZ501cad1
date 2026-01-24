@@ -1,5 +1,6 @@
 --[[
     damage.lua (CLEAN - No Metahook)
+
 --]]
 
 local lastHit = os.clock()
@@ -216,5 +217,6 @@ function kopis.damage(humanoid, part)
 end
 
 -- NO METAHOOK - Game handles its own damage normally
+-- Your exploit features call kopis.damage() for extended hitbox/resizer hits
 
 return kopis
