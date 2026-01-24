@@ -1,16 +1,31 @@
+--[[
+    hitboxExtender.lua (FIXED)
+    
+    Server validation from CombatDamageServer.lua line 55:
+    if (humanoid.Parent:GetPivot().Position - character:GetPivot().Position).Magnitude >= 12 then
+        return
+    end
+    
+    Server rejects hits > 12 studs, so hitbox extender is limited by this.
+--]]
+
 local hitboxExtender = {
     Activated = false,
     Keybind = Enum.KeyCode.X,
     Parts = {},
     DiedBinds = {},
     Size = 10,
-    Cooldown = os.clock(),
-    CharacterAdded = {}
+    CharacterAdded = {},
+    MaxServerDistance = 12,  -- From CombatDamageServer.lua line 55
 }
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+
+gg.getHitboxExtenderData = function()
+    return hitboxExtender
+end
 
 function hitboxExtender:Off()
     if hitboxExtender.PlayerAdded then
@@ -55,13 +70,33 @@ function hitboxExtender:On()
         proxy:Link(humanoidRootPart)
         proxy:SetSize(Vector3.new(self.Size, self.Size, self.Size))
         proxy:CreateOutline()
+        
         proxy:BindTouch(function(part)
-            if part.Parent and part.Parent:IsA("Tool") then
-                local tip = part.Parent:FindFirstChild("Tip", true)
-                if tip and part == tip then
-                    gg.kopis.damage(humanoid, part)
-                end
+            -- Check if it's a kopis tip
+            if not part.Parent then return end
+            if not part.Parent:IsA("Tool") then return end
+            
+            local tip = gg.kopis.getTip(part.Parent)
+            if not tip or part ~= tip then return end
+            
+            -- Get client position for distance check
+            local clientCharacter = gg.client.Character
+            if not clientCharacter then return end
+            
+            local clientRoot = clientCharacter:FindFirstChild("HumanoidRootPart") or clientCharacter:FindFirstChild("Torso")
+            if not clientRoot then return end
+            
+            local targetRoot = humanoid.Parent:FindFirstChild("HumanoidRootPart") or humanoid.Parent:FindFirstChild("Torso")
+            if not targetRoot then return end
+            
+            -- Server distance check (CombatDamageServer.lua validates <= 12 studs)
+            local distance = (clientRoot.Position - targetRoot.Position).Magnitude
+            if distance >= hitboxExtender.MaxServerDistance then
+                return  -- Server will reject
             end
+            
+            -- Deal damage
+            gg.kopis.damage(humanoid, part)
         end)
         
         local deathBind = humanoid.Died:Connect(function()
@@ -103,7 +138,8 @@ newKeybind:Bind(function(key)
     hitboxExtender.Keybind = key
 end)
 
-local newSlider = gg.slider.new(gg.ui:WaitForChild("Menu").Settings.hitboxExtender.Slider, 5, 15, 1)
+-- Max slider at 11 (server limit is 12)
+local newSlider = gg.slider.new(gg.ui:WaitForChild("Menu").Settings.hitboxExtender.Slider, 5, 11, 1)
 
 newSlider:Bind(function(val)
     hitboxExtender.Size = val
