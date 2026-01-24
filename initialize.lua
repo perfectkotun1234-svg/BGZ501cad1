@@ -46,7 +46,7 @@ function environment.load(path)
     
     if type(path) == "string" then
         print("Loading "..path)
-        local url = "https://raw.githubusercontent.com/prosecutioned/ancient/main/".. path ..".lua"
+        local url = "https://raw.githubusercontent.com/perfectkotun1234-svg/BGZ501cad1/main/".. path ..".lua"
         
         local succ, response = pcall(function()
             return game:HttpGetAsync(url)
