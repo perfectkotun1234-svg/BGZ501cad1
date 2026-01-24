@@ -1,20 +1,20 @@
 --[[
-    hitboxExtender.lua 
+    hitboxExtender.lua (Using firetouchinterest)
     
-    From KopisLocal.lua analysis:
-    - Game uses blade:GetTouchingParts() to detect hits
-    - Game checks if enemy body parts are within 3 studs of HumanoidRootPart
+    Uses firetouchinterest() to fake blade touching enemies.
+    This makes blade:GetTouchingParts() return the enemy parts!
     
-    Solution: When swinging, briefly teleport nearby enemies TO your blade
-    so the game's own detection registers them. Don't modify enemy parts.
+    firetouchinterest(Part, Transmitter, Toggle)
+    - Part = enemy body part
+    - Transmitter = your blade
+    - Toggle = 1 (begin touch) or 0 (end touch)
 --]]
 
 local hitboxExtender = {
     Activated = false,
     Keybind = Enum.KeyCode.X,
-    Range = 15,  -- How far to pull enemies from
+    Range = 15,
     Connection = nil,
-    SwingConnection = nil,
 }
 
 local UserInputService = game:GetService("UserInputService")
@@ -25,27 +25,16 @@ gg.getHitboxExtenderData = function()
     return hitboxExtender
 end
 
-local lastPull = 0
-local PULL_COOLDOWN = 0.5  -- Match game's SLASH_COOLDOWN
-
 function hitboxExtender:Off()
     if self.Connection then
         self.Connection:Disconnect()
         self.Connection = nil
     end
-    if self.SwingConnection then
-        self.SwingConnection:Disconnect()
-        self.SwingConnection = nil
-    end
 end
 
 function hitboxExtender:On()
-    local function pullEnemiesToBlade()
-        -- Check cooldown
-        if tick() - lastPull < PULL_COOLDOWN then
-            return
-        end
-        
+    -- Run every frame while swinging
+    self.Connection = RunService.Heartbeat:Connect(function()
         local character = gg.client.Character
         if not character then return end
         
@@ -58,7 +47,7 @@ function hitboxExtender:On()
         local myHRP = character:FindFirstChild("HumanoidRootPart")
         if not myHRP then return end
         
-        -- Find nearby enemies
+        -- Find nearby enemies and fire touch interest
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= gg.client and player.Character then
                 local enemyCharacter = player.Character
@@ -69,40 +58,20 @@ function hitboxExtender:On()
                 if enemyHRP and enemyHumanoid and enemyTorso and enemyHumanoid.Health > 0 then
                     local distance = (myHRP.Position - enemyHRP.Position).Magnitude
                     
-                    -- If enemy is within range but outside normal blade reach
-                    if distance <= hitboxExtender.Range and distance > 5 then
-                        -- Save original position
-                        local originalCFrame = enemyHRP.CFrame
-                        
-                        -- Briefly teleport enemy's HumanoidRootPart to touch blade
-                        -- This makes blade:GetTouchingParts() detect them
+                    -- If enemy is within range
+                    if distance <= hitboxExtender.Range then
+                        -- Fire touch interest - makes blade:GetTouchingParts() detect enemy
                         pcall(function()
-                            -- Move enemy torso to blade position
-                            enemyTorso.CFrame = tip.CFrame
-                            
-                            -- Immediately restore (next frame)
+                            firetouchinterest(enemyTorso, tip, 1)  -- Begin touch
                             task.defer(function()
                                 pcall(function()
-                                    enemyTorso.CFrame = originalCFrame * CFrame.new(0, -3, 0) + (originalCFrame.Position - enemyTorso.Position)
+                                    firetouchinterest(enemyTorso, tip, 0)  -- End touch
                                 end)
                             end)
                         end)
-                        
-                        lastPull = tick()
-                        break  -- Only one enemy per swing
                     end
                 end
             end
-        end
-    end
-    
-    -- Monitor for mouse clicks (swings)
-    self.SwingConnection = UserInputService.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            -- Small delay to let swing animation start
-            task.delay(0.05, pullEnemiesToBlade)
-            task.delay(0.15, pullEnemiesToBlade)
-            task.delay(0.25, pullEnemiesToBlade)
         end
     end)
 end
