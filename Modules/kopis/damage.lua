@@ -1,6 +1,7 @@
 local lastHit = os.clock()
 local playerCooldowns = {}
 local lastEventFiredAt = tick() - 100
+local currentSwingId = 0
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
@@ -156,7 +157,7 @@ function kopis.damage(humanoid, part)
         return
     end
     
-    if tick() - lastEventFiredAt > 0.5 then
+    if tick() - lastEventFiredAt > 0.7 then
         return
     end
     
@@ -179,17 +180,17 @@ function kopis.damage(humanoid, part)
     end
     
     local events = kopis.getCombatEvents()
-    if not events or not events.PlaySound or not events.DealDamage then 
+    if not events or not events.PlaySound then 
         return 
     end
     
     playerCooldowns[player.UserId] = tick()
     
-    local success = pcall(function()
+    pcall(function()
         events.PlaySound:FireServer(humanoid)
     end)
     
-    if success and gg.getCriticalHitData then
+    if gg.getCriticalHitData then
         local critData = gg.getCriticalHitData()
         if critData and critData.Activated then
             local chanceNum = math.random(0, 100)
@@ -215,9 +216,10 @@ mt.__namecall = newcclosure(function(self, ...)
     local arguments = {...}
     
     if method == "FireServer" and typeof(self) == "Instance" and self.Name then
-        if self.Name == "PlaySound" and arguments[1] and arguments[1]:IsA("Humanoid") then            
+        if self.Name == "DealDamage" then
             if tick() - lastEventFiredAt >= 0.55 then
                 lastEventFiredAt = tick()
+                currentSwingId = currentSwingId + 1
             end
         end
     end
