@@ -1,7 +1,4 @@
-local lastHit = os.clock()
-local playerCooldowns = {}
 local lastEventFiredAt = tick() - 100
-local currentSwingId = 0
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
@@ -157,7 +154,11 @@ function kopis.damage(humanoid, part)
         return
     end
     
-    if tick() - lastEventFiredAt > 0.7 then
+    if tick() - lastEventFiredAt < 0.7 then
+        return
+    end
+    
+    if humanoid == gg.client.Character and gg.client.Character:FindFirstChild("Humanoid") then
         return
     end
     
@@ -166,29 +167,19 @@ function kopis.damage(humanoid, part)
         return
     end
     
-    if player == gg.client then
-        return
-    end
-    
     if player.Team == gg.client.Team and not kopis.teamKill then
         return
     end
     
-    local playerCooldown = playerCooldowns[player.UserId] or 0
-    if tick() - playerCooldown < swingSpeeds.cooldown then
-        return
-    end
-    
     local events = kopis.getCombatEvents()
-    if not events or not events.PlaySound then 
+    if not events or not events.PlaySound or not events.DealDamage then 
         return 
     end
     
-    playerCooldowns[player.UserId] = tick()
+    lastEventFiredAt = tick()
     
-    pcall(function()
-        events.PlaySound:FireServer(humanoid)
-    end)
+    events.DealDamage:FireServer(3)
+    events.PlaySound:FireServer(humanoid)
     
     if gg.getCriticalHitData then
         local critData = gg.getCriticalHitData()
@@ -211,22 +202,17 @@ local mt = getrawmetatable(game)
 local old = mt.__namecall
 setreadonly(mt, false)
 
-mt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
+getrawmetatable(game).__namecall = function(self, ...)
     local arguments = {...}
-    
-    if method == "FireServer" and typeof(self) == "Instance" and self.Name then
-        if self.Name == "DealDamage" then
-            if tick() - lastEventFiredAt >= 0.55 then
-                lastEventFiredAt = tick()
-                currentSwingId = currentSwingId + 1
-            end
+    if typeof(self) == "Instance" and self.Name and (self.Name == "PlaySound" or self.Name == "DealDamage") then
+        if tick() - lastEventFiredAt < 0.7 then
+            return old(self, ...)
         end
+        
+        lastEventFiredAt = tick()
     end
     
     return old(self, ...)
-end)
-
-setreadonly(mt, true)
+end
 
 return kopis
