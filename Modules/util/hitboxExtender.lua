@@ -1,20 +1,21 @@
 --[[
-    hitboxExtender.lua (Using firetouchinterest)
+    hitboxExtender.lua (Hook GetTouchingParts Method)
     
-    Uses firetouchinterest() to fake blade touching enemies.
-    This makes blade:GetTouchingParts() return the enemy parts!
+    Hooks the blade's GetTouchingParts() function to inject
+    nearby enemy body parts into the result.
     
-    firetouchinterest(Part, Transmitter, Toggle)
-    - Part = enemy body part
-    - Transmitter = your blade
-    - Toggle = 1 (begin touch) or 0 (end touch)
+    When game calls: blade:GetTouchingParts()
+    We return: original parts + nearby enemy parts
+    
+    This makes the game think enemies are touching the blade!
 --]]
 
 local hitboxExtender = {
     Activated = false,
     Keybind = Enum.KeyCode.X,
     Range = 15,
-    Connection = nil,
+    Hooked = false,
+    OldNamecall = nil,
 }
 
 local UserInputService = game:GetService("UserInputService")
@@ -25,55 +26,101 @@ gg.getHitboxExtenderData = function()
     return hitboxExtender
 end
 
-function hitboxExtender:Off()
-    if self.Connection then
-        self.Connection:Disconnect()
-        self.Connection = nil
-    end
-end
-
-function hitboxExtender:On()
-    -- Run every frame while swinging
-    self.Connection = RunService.Heartbeat:Connect(function()
-        local character = gg.client.Character
-        if not character then return end
-        
-        local kopis = character:FindFirstChild("Kopis")
-        if not kopis then return end
-        
-        local tip = gg.kopis.getTip(kopis)
-        if not tip then return end
-        
-        local myHRP = character:FindFirstChild("HumanoidRootPart")
-        if not myHRP then return end
-        
-        -- Find nearby enemies and fire touch interest
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= gg.client and player.Character then
-                local enemyCharacter = player.Character
-                local enemyHRP = enemyCharacter:FindFirstChild("HumanoidRootPart")
-                local enemyHumanoid = enemyCharacter:FindFirstChild("Humanoid")
-                local enemyTorso = enemyCharacter:FindFirstChild("Torso")
+-- Get nearby enemy parts
+local function getNearbyEnemyParts()
+    local enemyParts = {}
+    local character = gg.client.Character
+    if not character then return enemyParts end
+    
+    local myHRP = character:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return enemyParts end
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= gg.client and player.Character then
+            local enemyCharacter = player.Character
+            local enemyHRP = enemyCharacter:FindFirstChild("HumanoidRootPart")
+            local enemyHumanoid = enemyCharacter:FindFirstChild("Humanoid")
+            
+            if enemyHRP and enemyHumanoid and enemyHumanoid.Health > 0 then
+                local distance = (myHRP.Position - enemyHRP.Position).Magnitude
                 
-                if enemyHRP and enemyHumanoid and enemyTorso and enemyHumanoid.Health > 0 then
-                    local distance = (myHRP.Position - enemyHRP.Position).Magnitude
+                if distance <= hitboxExtender.Range then
+                    -- Add enemy body parts
+                    local torso = enemyCharacter:FindFirstChild("Torso")
+                    local head = enemyCharacter:FindFirstChild("Head")
+                    local leftArm = enemyCharacter:FindFirstChild("Left Arm")
+                    local rightArm = enemyCharacter:FindFirstChild("Right Arm")
                     
-                    -- If enemy is within range
-                    if distance <= hitboxExtender.Range then
-                        -- Fire touch interest - makes blade:GetTouchingParts() detect enemy
-                        pcall(function()
-                            firetouchinterest(enemyTorso, tip, 1)  -- Begin touch
-                            task.defer(function()
-                                pcall(function()
-                                    firetouchinterest(enemyTorso, tip, 0)  -- End touch
-                                end)
-                            end)
-                        end)
-                    end
+                    if torso then table.insert(enemyParts, torso) end
+                    if head then table.insert(enemyParts, head) end
+                    if leftArm then table.insert(enemyParts, leftArm) end
+                    if rightArm then table.insert(enemyParts, rightArm) end
                 end
             end
         end
+    end
+    
+    return enemyParts
+end
+
+function hitboxExtender:SetupHook()
+    if self.Hooked then return end
+    
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    self.OldNamecall = oldNamecall
+    
+    setreadonly(mt, false)
+    
+    mt.__namecall = newcclosure(function(self2, ...)
+        local method = getnamecallmethod()
+        
+        -- Check if it's GetTouchingParts on the blade tip
+        if method == "GetTouchingParts" and hitboxExtender.Activated then
+            -- Check if this is the blade
+            if self2 and self2.Name == "Tip" then
+                local parent = self2.Parent
+                if parent and parent.Name == "Blade" then
+                    -- This is the kopis blade!
+                    local originalParts = oldNamecall(self2, ...)
+                    
+                    -- Add nearby enemy parts
+                    local enemyParts = getNearbyEnemyParts()
+                    for _, part in pairs(enemyParts) do
+                        table.insert(originalParts, part)
+                    end
+                    
+                    return originalParts
+                end
+            end
+        end
+        
+        return oldNamecall(self2, ...)
     end)
+    
+    setreadonly(mt, true)
+    self.Hooked = true
+end
+
+function hitboxExtender:RemoveHook()
+    if not self.Hooked or not self.OldNamecall then return end
+    
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+    mt.__namecall = self.OldNamecall
+    setreadonly(mt, true)
+    
+    self.Hooked = false
+    self.OldNamecall = nil
+end
+
+function hitboxExtender:On()
+    self:SetupHook()
+end
+
+function hitboxExtender:Off()
+    -- Don't remove hook, just deactivate
+    -- (removing hook might cause issues if other scripts use it)
 end
 
 local newKeybind = gg.keybinds.newButton(gg.ui.Menu.Settings.hitboxExtender.Keybind, "Hitbox Extender")
@@ -82,7 +129,7 @@ newKeybind:Bind(function(key)
     hitboxExtender.Keybind = key
 end)
 
-local newSlider = gg.slider.new(gg.ui:WaitForChild("Menu").Settings.hitboxExtender.Slider, 5, 20, 1)
+local newSlider = gg.slider.new(gg.ui:WaitForChild("Menu").Settings.hitboxExtender.Slider, 5, 25, 1)
 
 newSlider:Bind(function(val)
     hitboxExtender.Range = val
