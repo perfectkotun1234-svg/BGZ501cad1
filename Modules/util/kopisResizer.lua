@@ -18,7 +18,7 @@ function kopisResizer:On()
     local function createProxy(kopis)
         if not kopis then return end
         
-        local tip = kopis:FindFirstChild("Tip", true)
+        local tip = gg.kopis.getTip(kopis)
         if not tip then return end
         
         local proxy = gg.proxyPart.new()
@@ -31,12 +31,7 @@ function kopisResizer:On()
             
             local humanoid = character:FindFirstChild("Humanoid")
             if humanoid and game:GetService("Players"):GetPlayerFromCharacter(character) then
-                if gg.kopis.getKopis() then
-                    local currentTip = gg.kopis.getKopis():FindFirstChild("Tip", true)
-                    if currentTip then
-                        gg.kopis.damage(humanoid, currentTip)
-                    end
-                end
+                gg.kopis.damage(humanoid, tip)
             end
         end)
 
@@ -50,16 +45,13 @@ function kopisResizer:On()
             kopisResizer.Connection2 = nil
         end
         kopisResizer.Connection2 = character.ChildAdded:Connect(function(obj)
-            if obj:IsA("Tool") then
-                local kopisTool = gg.kopis.getKopis()
-                if obj == kopisTool then
-                    if kopisResizer.Proxy then
-                        kopisResizer.Proxy:Destroy()
-                        kopisResizer.Proxy = nil
-                    end
-                    task.wait(0.1)
-                    createProxy(kopisTool)
+            if obj:IsA("Tool") and obj.Name == "Kopis" then
+                if kopisResizer.Proxy then
+                    kopisResizer.Proxy:Destroy()
+                    kopisResizer.Proxy = nil
                 end
+                task.wait(0.1)
+                createProxy(obj)
             end
         end)
     end
