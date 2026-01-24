@@ -1,9 +1,7 @@
---[[
-    show.lua
-]]
-
 local ui = gg.ui
+
 local loading = ui:WaitForChild("Loading")
+loading.Visible = true
 
 local SETTINGS = {
     BEGINNING_DELAY = 0,
@@ -11,70 +9,52 @@ local SETTINGS = {
 }
 
 ui.Parent = game:GetService("CoreGui")
-
-loading.Visible = true
 loading.Size = UDim2.new(0, 0, 0, 0)
 
-task.wait(SETTINGS.BEGINNING_DELAY)
+wait(SETTINGS.BEGINNING_DELAY)
 
-loading:TweenSize(UDim2.new(0, 263, 0, 263), Enum.EasingDirection.Out, Enum.EasingStyle.Back, 2, true)
+loading:TweenSize(UDim2.new(0, 263, 0, 263), "Out", "Back", 2, true)
 
-task.wait(SETTINGS.LOADING_DELAY)
+wait(SETTINGS.LOADING_DELAY)
 
-local goat = loading:FindFirstChild("Goat")
-if goat then
-    goat:TweenSize(UDim2.new(0, 0, 0, 0), Enum.EasingDirection.In, Enum.EasingStyle.Back, 0.3, true)
+loading.Goat:TweenSize(UDim2.new(0, 0, 0, 0), "In", "Back", 0.3, true)
+
+loading:TweenSize(UDim2.new(0, 321, 0, 373), "In", "Linear", 0.4, true)
+
+for i = loading.Circle.SliceScale, 0.4, -.1 do
+    wait()
+    loading.Circle.SliceScale = i
 end
 
-loading:TweenSize(UDim2.new(0, 321, 0, 373), Enum.EasingDirection.In, Enum.EasingStyle.Linear, 0.4, true)
+loading.Header.Visible = true
+loading.Header.TextTransparency = 1
 
-local circle = loading:FindFirstChild("Circle")
-if circle then
-    for i = circle.ImageTransparency, 0.6, 0.1 do
-        task.wait()
-        circle.ImageTransparency = i
+spawn(function()
+    for i = loading.Header.TextTransparency, 0, -.1 do
+        wait()
+        loading.Header.TextTransparency = i
     end
-end
+end)
 
-local header = loading:FindFirstChild("Header")
-if header then
-    header.Visible = true
-    header.TextTransparency = 1
-    
-    task.spawn(function()
-        for i = 1, 0, -0.1 do
-            task.wait()
-            header.TextTransparency = i
-        end
-    end)
-end
+loading.TokenInputBox.Size = UDim2.new(0, 0, 0.107, 0)
+loading.TokenInputBox.Visible = true
 
-local tokenInputBox = loading:FindFirstChild("TokenInputBox")
-if tokenInputBox then
-    tokenInputBox.Size = UDim2.new(0, 0, 0.107, 0)
-    tokenInputBox.Visible = true
-    tokenInputBox:TweenSize(UDim2.new(0.821, 0, 0.107, 0), Enum.EasingDirection.In, Enum.EasingStyle.Linear, 0.2, true)
-end
+loading.TokenInputBox:TweenSize(UDim2.new(.821, 0, .107, 0), "In", "Linear", 0.2, true)
 
-task.wait(0.2)
+wait(.2)
 
-local lockIcon = loading:FindFirstChild("LockIcon")
-if lockIcon then
-    lockIcon.Size = UDim2.new(0, 0, 0, 0)
-    lockIcon.Visible = true
-    task.wait()
-    lockIcon:TweenSize(UDim2.new(0.077, 0, 0.062, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Back, 0.2, true)
-end
+loading.LockIcon.Size = UDim2.new(0, 0, 0, 0)
+loading.LockIcon.Visible = true
 
-local input = loading:FindFirstChild("Input")
-if input then
-    input.Visible = true
-    input.TextTransparency = 1
+wait()
+loading.LockIcon:TweenSize(UDim2.new(.077, 0, .062, 0), "Out", "Back", 0.2, true)
 
-    task.spawn(function()
-        for i = 1, 0, -0.1 do
-            task.wait()
-            input.TextTransparency = i
-        end
-    end)
-end
+loading.Input.Visible = true
+loading.Input.TextTransparency = 1
+
+spawn(function()
+    for i = loading.Input.TextTransparency, 0, -.1 do
+        wait()
+        loading.Input.TextTransparency = i
+    end
+end)

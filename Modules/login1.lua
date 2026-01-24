@@ -16,7 +16,7 @@ function loadModules()
     gg.load("Modules/menu")
 end
 
-loading.Input.FocusLost:Connect(function()
+loading.Input.FocusLost:connect(function()
     local response = loading.Input.Text
     if response == "kalli67" then
         loadModules()
