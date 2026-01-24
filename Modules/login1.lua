@@ -16,11 +16,8 @@ function loadModules()
     gg.load("Modules/menu")
 end
 
-local tokenInputBox = loading:WaitForChild("TokenInputBox")
-local inputBox = tokenInputBox:WaitForChild("Input")
-
-inputBox.FocusLost:Connect(function()
-    local response = inputBox.Text
+loading.Input.FocusLost:Connect(function()
+    local response = loading.Input.Text
     if response == "kalli67" then
         loadModules()
         gg.load("Modules/login/hide")
