@@ -1,7 +1,7 @@
 local lastHit = os.clock()
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
-
+print("hello damage.lua for sure loaded")
 local kopis = {
     authorizedHit = true,
     teamKill = false,
@@ -109,7 +109,7 @@ function kopis.getCombatEvents()
     local success, events = pcall(function()
         return game:GetService("ReplicatedStorage").CombatEvents
     end)
-    if success then
+    if success and events then
         return {
             PlaySound = events:FindFirstChild("PlaySound"),
             DealDamage = events:FindFirstChild("DealDamage")
@@ -160,27 +160,33 @@ mt.__namecall = newcclosure(function(self, ...)
     
     if method == "FireServer" and typeof(self) == "Instance" then
         local events = kopis.getCombatEvents()
-        if events and self == events.PlaySound then
+        if events and events.PlaySound and self == events.PlaySound then
             local humanoid = args[1]
             
             if humanoid and humanoid:IsA("Humanoid") then
                 local player = Players:GetPlayerFromCharacter(humanoid.Parent)
                 
-                if player then
+                if player and gg and gg.client then
                     if player.Team == gg.client.Team and not kopis.teamKill then
+                        print("[DAMAGE.LUA] Blocked team kill attempt")
                         return
                     end
                     
-                    if gg.getCriticalHitData and gg.getCriticalHitData().Activated then
-                        local critData = gg.getCriticalHitData()
-                        local chanceNum = math.random(0, 100)
-                        
-                        if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
-                            task.spawn(function()
-                                task.wait(critData.Delay)
-                                lastCrit = os.clock()
-                                old(events.PlaySound, "FireServer", humanoid)
-                            end)
+                    if gg.getCriticalHitData then
+                        local critDataFunc = gg.getCriticalHitData()
+                        if critDataFunc and critDataFunc.Activated then
+                            local critData = critDataFunc
+                            local chanceNum = math.random(0, 100)
+                            
+                            if chanceNum <= critData.Chance and os.clock() - lastCrit >= critData.Delay then
+                                task.spawn(function()
+                                    task.wait(critData.Delay)
+                                    lastCrit = os.clock()
+                                    pcall(function()
+                                        events.PlaySound:FireServer(humanoid)
+                                    end)
+                                end)
+                            end
                         end
                     end
                 end
@@ -192,5 +198,7 @@ mt.__namecall = newcclosure(function(self, ...)
 end)
 
 setreadonly(mt, true)
+
+print("[DAMAGE.LUA] Loaded successfully - Team Kill:", kopis.teamKill)
 
 return kopis
