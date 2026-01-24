@@ -1,11 +1,6 @@
 --[[
     kopisResizer.lua (FIXED)
-    
-    ANTI-CHEAT WARNING from KopisLocal.lua lines 188-190:
-    getPropertyChangedSignal(blade, "Size"):Connect(function()
-        game:GetService("ReplicatedStorage").AnimationsCheck:FireServer("Kopis Resizing", blade.Size)
-    end)
-    
+      
     The game detects blade resizing and reports to server!
     This version uses a PROXY PART instead of modifying actual blade.
     
