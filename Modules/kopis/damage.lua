@@ -4,7 +4,7 @@
     NO METAHOOK VERSION - Let the game handle damage normally.
     
     The metahook was breaking the game's damage system.
-    Your exploit features (hitbox, resizer, etc.) will call kopis.damage() directly.
+ exploit features (hitbox, resizer, etc.) will call kopis.damage() directly.
 --]]
 
 local lastHit = os.clock()
